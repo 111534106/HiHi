@@ -1,5 +1,5 @@
 // 這就是 server.js 的「Vercel 雲端版本」
-// Vercel 會自動將 /api 資料夾中的 .js 檔案變成「Serverless Function」
+// Vercel 會自動將 /api 資料夾中的 .js 檔案變成「Serverless Function"
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -46,6 +46,45 @@ JSON 結構範本如下：
 }
 `;
 
+// Helper: call Google Generative Language List Models endpoint to pick a good model when possible
+async function pickBestModel(apiKey) {
+  if (!apiKey) return null;
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+    const resp = await fetch(url);
+    const info = await resp.json();
+
+    // The API usually returns { models: [ { name: 'models/...' }, ... ] }
+    const models = Array.isArray(info.models) ? info.models : (Array.isArray(info) ? info : []);
+    if (!models || models.length === 0) return null;
+
+    // Preference order (try to find the most capable Gemini model available)
+    const prefs = [
+      'gemini-1.5-pro',
+      'gemini-1.5',
+      'gemini-1.0',
+      'gemini-pro',
+      'gemini'
+    ];
+
+    for (const p of prefs) {
+      const found = models.find(m => (m.name || m).includes(p));
+      if (found) return (found.name || found);
+    }
+
+    // If none matched preferences, try to find any model that contains 'gemini'
+    const anyGemini = models.find(m => (m.name || m).toLowerCase().includes('gemini'));
+    if (anyGemini) return (anyGemini.name || anyGemini);
+
+    // Fallback: return the first model name if present
+    const first = models[0];
+    return first.name || first;
+  } catch (err) {
+    console.error('Failed to list models for picking best model:', err);
+    return null;
+  }
+}
+
 // 3. Vercel 的 Serverless Function 主體
 export default async function handler(req, res) {
     // 只接受 POST 請求
@@ -54,7 +93,8 @@ export default async function handler(req, res) {
     }
 
     // 檢查金鑰是否存在
-    if (!process.env.GEMINI_API_KEY) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
         return res.status(500).json({ error: '伺服器金鑰尚未設定 (GEMINI_API_KEY is missing)' });
     }
 
@@ -73,11 +113,17 @@ export default async function handler(req, res) {
         ${context || '無'}
         `;
 
-        // [!! 最終修正 !!] 
-        // 1. 更換為 'gemini-pro' 模型
-        // 2. 移除 'responseSchema'，因為 gemini-pro 不支援
+        // Try to pick a best available model by listing models first. If that fails, fallback to 'gemini-pro'.
+        let chosenModel = await pickBestModel(apiKey);
+        if (!chosenModel) {
+          // older code used 'gemini-pro' — keep as last-resort fallback
+          chosenModel = 'gemini-pro';
+        }
+
+        console.log('Using model:', chosenModel);
+
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-pro", 
+            model: chosenModel, 
             systemInstruction: aiSystemInstruction,
             generationConfig: {
                 // 我們依賴 systemInstruction 來強制 JSON
@@ -89,10 +135,7 @@ export default async function handler(req, res) {
         const result = await chat.sendMessage(userMessage); // 傳送組合好的訊息
         const responseText = result.response.text();
 
-        // [!! 清理修正 !!] 
-        // 嘗試解析 AI 回傳的文字
-        // 有時 AI 會在 JSON 外面包裝 ```json ... ```，我們需要把它去掉
-        
+        // 嘗試解析 AI 回傳的文字 (可能包在 ```json ``` 中)
         let cleanedText = responseText;
         if (cleanedText.startsWith("```json")) {
             cleanedText = cleanedText.substring(7); // 移除 "```json"
@@ -100,7 +143,7 @@ export default async function handler(req, res) {
         if (cleanedText.endsWith("```")) {
             cleanedText = cleanedText.substring(0, cleanedText.length - 3); // 移除 "```"
         }
-        
+
         res.status(200).json(JSON.parse(cleanedText.trim()));
 
     } catch (error) {
