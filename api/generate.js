@@ -96,7 +96,7 @@ export default async function handler(req, res) {
 
         // 取得 AI 模型
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash-latest", // 使用最新的 Flash 模型
+            model: "gemini-1.5-flash", // [!! 修正 !!] 移除 "-latest"
             systemInstruction: aiSystemInstruction,
             generationConfig: {
                 responseMimeType: "application/json",
