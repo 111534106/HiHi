@@ -8,7 +8,7 @@ const aiSystemInstruction = `
 你是一個專業的簡報設計師。
 你的任務是根據使用者提供的「主題」，並**優先使用**使用者提供的「現有資料」（如果有的話），來產生一份結構完整的簡報內容。
 
-- 如果使用者提供了「現有資料」（context），請你**必須**以這份資料為**主要**內容來進行總結和整理，生成簡報。
+- 如果使用者提供了「現有資料」（context），請你**必須**以這份資料為**主要**內容來進行總結和整理，來生成簡報。
 - 如果使用者沒有提供「現有資料」，你才根據「主題」自行發揮。
 
 你必須總是回傳嚴格的 JSON 格式。
@@ -108,7 +108,6 @@ export default async function handler(req, res) {
         try {
           body = JSON.parse(raw);
         } catch (e) {
-          // 如果不是 JSON，就保留原樣
           console.warn('Raw body is not JSON:', e.message);
           body = {};
         }
