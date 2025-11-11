@@ -3,12 +3,12 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// System instruction（保留你原本的提示，可自行調整內容）
+// System instruction（可依需求調整）
 const aiSystemInstruction = `
 你是一個專業的簡報設計師。
 你的任務是根據使用者提供的「主題」，並**優先使用**使用者提供的「現有資料」（如果有的話），來產生一份結構完整的簡報內容。
 
-- 如果使用者提供了「現有資料」（context），請你**必須**以這份資料為**主要**內容來進行總結和整理，來生成簡報。
+- 如果使用者提供了「現有資料」（context），請你**必須**以這份資料為**主要**內容來進行總結和整理，生成簡報。
 - 如果使用者沒有提供「現有資料」，你才根據「主題」自行發揮。
 
 你必須總是回傳嚴格的 JSON 格式。
@@ -22,7 +22,7 @@ const aiSystemInstruction = `
 4. 一張給設計師的「圖片建議」(image_suggestion)。
 `;
 
-// 讀 raw body 的 helper（在 req.body 為空時嘗試解析）
+// read raw body helper
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -32,7 +32,6 @@ function readRawBody(req) {
   });
 }
 
-// 更謹慎的 pickBestModel：列出 models，避開包含 "flash" 的，並檢查 metadata 是否支援 generateContent
 async function pickBestModel(apiKey) {
   if (!apiKey) return null;
   try {
@@ -47,12 +46,10 @@ async function pickBestModel(apiKey) {
 
     if (!models || models.length === 0) return null;
 
-    // helper 判斷 model 是否明確支援 generateContent
     const supportsGenerate = (m) => {
       if (!m) return false;
       if (Array.isArray(m.supportedMethods) && m.supportedMethods.includes('generateContent')) return true;
       if (Array.isArray(m.supportedGeneration) && m.supportedGeneration.includes('generateContent')) return true;
-      // fallback：檢查字串里有沒有 generate 的提示
       const s = JSON.stringify(m).toLowerCase();
       if (s.includes('generatecontent') || s.includes('generate')) return true;
       return false;
@@ -60,27 +57,22 @@ async function pickBestModel(apiKey) {
 
     const prefs = ['gemini-1.5-pro','gemini-1.5','gemini-1.0','gemini-pro','gemini'];
 
-    // 1) 首先找 preferred 且非 flash 且明確支援 generate 的 model
     for (const p of prefs) {
       const found = models.find(m => (m.name || '').includes(p) && !(m.name || '').toLowerCase().includes('flash') && supportsGenerate(m));
       if (found) return found.name || found;
     }
 
-    // 2) 再找任何非 flash 且明確支援 generate 的 model
     const anyGen = models.find(m => !(m.name || '').toLowerCase().includes('flash') && supportsGenerate(m));
     if (anyGen) return anyGen.name || anyGen;
 
-    // 3) 若沒 metadata，選擇任何 preferred 且非 flash 的 model 名稱（風險較高）
     for (const p of prefs) {
       const found = models.find(m => (m.name || '').includes(p) && !(m.name || '').toLowerCase().includes('flash'));
       if (found) return found.name || found;
     }
 
-    // 4) 試找任何非 flash 的 model
     const nonFlash = models.find(m => !(m.name || '').toLowerCase().includes('flash'));
     if (nonFlash) return nonFlash.name || nonFlash;
 
-    // 5) 最後的 fallback：回傳第一個 model name（最後手段）
     return models[0].name || models[0];
   } catch (err) {
     console.error('Failed to list models for picking best model:', err);
@@ -100,37 +92,28 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 確保我們有 request body：嘗試使用解析後的 req.body，若為 undefined，則讀 raw body 並嘗試解析
     let body = req.body;
     if (!body || Object.keys(body).length === 0) {
       const raw = await readRawBody(req);
       if (raw) {
-        try {
-          body = JSON.parse(raw);
-        } catch (e) {
-          console.warn('Raw body is not JSON:', e.message);
-          body = {};
-        }
+        try { body = JSON.parse(raw); } catch (e) { console.warn('Raw body is not JSON:', e.message); body = {}; }
       } else {
         body = {};
       }
     }
 
     const { topic, context } = body || {};
-
     if (!topic) {
       return res.status(400).json({
-        error: '請提供主題 (topic) 在 JSON request body 中，例如: { "topic": "你的主題" }',
+        error: '請提供主題 (topic) 在 JSON request body 中，例如: { \"topic\": \"你的主題\" }',
         hint: "請加上標頭 -H 'Content-Type: application/json' 並以 -d 提供 JSON"
       });
     }
 
     const userMessage = `簡報主題：${topic}\n\n現有資料（請優先使用此資料）：\n${context || '無'}`;
 
-    // 選模型（try list models）
     let chosenModel = await pickBestModel(apiKey);
     if (!chosenModel) {
-      // 最保守的 fallback：使用 models/gemini-1.5-pro 全名（若你的帳號沒有該 model 仍會失敗）
       chosenModel = 'models/gemini-1.5-pro';
     }
 
@@ -146,7 +129,6 @@ export default async function handler(req, res) {
     const result = await chat.sendMessage(userMessage);
     const responseText = result.response.text();
 
-    // 清理可能的 ```json 包裝
     let cleaned = responseText;
     if (cleaned.startsWith('```json')) cleaned = cleaned.substring(7);
     if (cleaned.endsWith('```')) cleaned = cleaned.substring(0, cleaned.length - 3);
