@@ -1,0 +1,10 @@
+{
+  "name": "ai-presenter-cloud",
+  "version": "1.0.0",
+  "description": "AI 簡報產生器的 Vercel 後端",
+  "main": "api/generate.js",
+  "type": "module",
+  "dependencies": {
+    "@google/generative-ai": "^0.15.0"
+  }
+}

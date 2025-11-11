@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 簡報產生器</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+        }
+        .slide {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            min-height: 450px; /* 最小高度 */
+        }
+        .slide.active {
+            display: block;
+            opacity: 1;
+        }
+        /* 簡易 loading 轉圈動畫 */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-start min-h-screen p-4 md:p-8">
+
+    <!-- 1. 輸入區域 -->
+    <div class="w-full max-w-4xl mb-4 p-4 bg-white rounded-lg shadow-lg">
+        <h2 class="text-xl font-bold mb-3 text-gray-800">AI 簡報產生器</h2>
+        
+        <div class="mb-3">
+            <label for="topic-input" class="block text-sm font-medium text-gray-700 mb-1">簡報主題 (必填)</label>
+            <input type="text" id="topic-input" class="w-full border border-gray-300 rounded-lg p-3 text-base" placeholder="例如：AI 對未來工作的影響">
+        </div>
+
+        <div class="mb-3">
+            <label for="context-input" class="block text-sm font-medium text-gray-700 mb-1">貼上您的現有資料 (選填)</label>
+            <textarea id="context-input" rows="8" class="w-full border border-gray-300 rounded-lg p-3 text-base" placeholder="將您的草稿、筆記或任何相關文字貼在這裡，AI 會為您整理成簡報..."></textarea>
+            
+            <div class="flex items-center justify-between mt-2">
+                <span class="text-sm text-gray-500">或上傳 .txt 純文字檔案：</span>
+                <input type="file" id="file-input" accept=".txt, text/plain" class="text-sm text-gray-600
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-lg file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-50 file:text-blue-700
+                    hover:file:bg-blue-100 transition duration-150
+                ">
+            </div>
+        </div>
+
+        <button id="generate-btn" class="w-full bg-blue-600 text-white font-medium py-3 px-5 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md">
+            <span id="btn-text">生成簡報</span>
+            <span id="btn-loading" class="hidden">生成中...</span>
+        </button>
+    </div>
+
+    <!-- 2. 讀取中提示 -->
+    <div id="loading-indicator" class="w-full max-w-4xl mb-4 p-6 bg-white rounded-lg shadow-lg text-center hidden">
+        <div class="loader mx-auto"></div>
+        <p class="text-gray-600 mt-3">AI 正在生成中，請稍候... (可能需要 10-20 秒)</p>
+    </div>
+
+    <!-- 3. 簡報顯示區域 -->
+    <div id="presentation-container" class="w-full max-w-4xl bg-white rounded-lg shadow-2xl overflow-hidden hidden">
+        <!-- 簡報標題 -->
+        <header class="bg-gray-800 text-white p-4">
+            <h1 id="presentation-title" class="text-xl md:text-2xl font-bold text-center"></h1>
+        </header>
+
+        <!-- 投影片內容區域 -->
+        <main id="slide-container" class="p-6 md:p-10 relative">
+            <!-- 投影片將由 JavaScript 動態插入此處 -->
+        </main>
+
+        <!-- 導覽控制 -->
+        <footer class="bg-gray-50 border-t border-gray-200 p-4 flex justify-between items-center">
+            <button id="prev-btn" class="bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg hover:bg-gray-400 disabled:opacity-50 transition duration-200">
+                &larr; 上一頁
+            </button>
+            <div id="slide-counter" class="text-sm text-gray-600">
+                第 <span id="current-slide-num">1</span> / <span id="total-slides-num">1</span> 頁
+            </div>
+            <button id="next-btn" class="bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition duration-200">
+                下一頁 &rarr;
+            </button>
+        </footer>
+    </div>
+
+    <script>
+        let currentSlideIndex = 0;
+        let slides = [];
+        let totalSlides = 0;
+
+        // 取得 DOM 元素
+        const generateBtn = document.getElementById('generate-btn');
+        const topicInput = document.getElementById('topic-input');
+        const contextInput = document.getElementById('context-input'); // [!!]
+        const fileInput = document.getElementById('file-input'); // [!!]
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const presentationContainer = document.getElementById('presentation-container');
+        
+        const slideContainer = document.getElementById('slide-container');
+        const presentationTitle = document.getElementById('presentation-title');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const currentSlideNumEl = document.getElementById('current-slide-num');
+        const totalSlidesNumEl = document.getElementById('total-slides-num');
+
+        // 渲染投影片
+        function renderSlidesUI(presentationData) {
+            slideContainer.innerHTML = ''; // 清空
+            presentationTitle.textContent = presentationData.presentation_title;
+            
+            slides = presentationData.slides;
+            totalSlides = slides.length;
+
+            slides.forEach((slide, index) => {
+                const slideEl = document.createElement('div');
+                slideEl.id = `slide-${index}`;
+                slideEl.className = 'slide w-full';
+
+                const title = document.createElement('h2');
+                title.className = 'text-2xl md:text-3xl font-bold text-gray-900 mb-6';
+                title.textContent = slide.slide_title;
+                slideEl.appendChild(title);
+
+                const contentList = document.createElement('ul');
+                contentList.className = 'list-disc list-inside space-y-3 text-gray-700 text-base md:text-lg';
+                slide.slide_content.forEach(point => {
+                    const item = document.createElement('li');
+                    item.textContent = point;
+                    contentList.appendChild(item);
+                });
+                slideEl.appendChild(contentList);
+                
+                const suggestion = document.createElement('div');
+                suggestion.className = 'mt-8 p-3 bg-gray-50 border border-gray-200 rounded-lg';
+                suggestion.innerHTML = `
+                    <h4 class="font-semibold text-sm text-gray-600">AI 圖片建議：</h4>
+                    <p class="text-sm text-gray-500 italic">${slide.image_suggestion}</p>
+                `;
+                slideEl.appendChild(suggestion);
+
+                slideContainer.appendChild(slideEl);
+            });
+
+            totalSlidesNumEl.textContent = totalSlides;
+        }
+
+        // 顯示投影片
+        function showSlide(index) {
+            const currentActive = document.querySelector('.slide.active');
+            if (currentActive) {
+                currentActive.classList.remove('active');
+            }
+            const newSlide = document.getElementById(`slide-${index}`);
+            if (newSlide) {
+                newSlide.classList.add('active');
+            }
+            currentSlideNumEl.textContent = index + 1;
+            currentSlideIndex = index;
+            updateControls();
+        }
+
+        // 更新按鈕
+        function updateControls() {
+            prevBtn.disabled = (currentSlideIndex === 0);
+            nextBtn.disabled = (currentSlideIndex === totalSlides - 1);
+            if (totalSlides <= 1) {
+                 prevBtn.disabled = true;
+                 nextBtn.disabled = true;
+            }
+        }
+
+        prevBtn.addEventListener('click', () => {
+            if (currentSlideIndex > 0) showSlide(currentSlideIndex - 1);
+        });
+
+        nextBtn.addEventListener('click', () => {
+            if (currentSlideIndex < totalSlides - 1) showSlide(currentSlideIndex + 1);
+        });
+
+        // 綁定「上傳檔案」事件
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                if (file.type !== "text/plain") {
+                    alert("僅支援 .txt 純文字檔案。");
+                    event.target.value = null; return;
+                }
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    contextInput.value = e.target.result; // 填入文字框
+                };
+                reader.onerror = (e) => { alert("檔案讀取失敗。"); };
+                reader.readAsText(file);
+                event.target.value = null;
+            }
+        });
+
+        // 綁定「生成」按鈕事件
+        generateBtn.addEventListener('click', async () => {
+            const topic = topicInput.value;
+            const context = contextInput.value; // [!!]
+
+            if (!topic) {
+                alert('請輸入簡報主題');
+                return;
+            }
+
+            // 1. 開始讀取
+            loadingIndicator.classList.remove('hidden');
+            presentationContainer.classList.add('hidden'); // 隱藏舊的簡報
+            generateBtn.disabled = true;
+            generateBtn.querySelector('#btn-text').classList.add('hidden');
+            generateBtn.querySelector('#btn-loading').classList.remove('hidden');
+
+            try {
+                // 2. 呼叫我們的「雲端後端」
+                // Vercel 會自動把 /api/generate.js 變成一個公開的 API 端點
+                // [注意] 我們使用相對路徑 '/api/generate'
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    // [!!] 把 topic 和 context 一起傳過去
+                    body: JSON.stringify({ topic: topic, context: context })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '後端伺服器錯誤');
+                }
+
+                const data = await response.json(); // 這就是 AI 產生的 JSON
+
+                // 3. 渲染新的簡報
+                renderSlidesUI(data);
+                showSlide(0); // 顯示第一張
+                presentationContainer.classList.remove('hidden'); // 顯示簡報區
+
+            } catch (error) {
+                console.error('生成失敗:', error);
+                alert('簡報生成失敗：\n' + error.message);
+            } finally {
+                // 4. 結束讀取
+                loadingIndicator.classList.add('hidden');
+                generateBtn.disabled = false;
+                generateBtn.querySelector('#btn-text').classList.remove('hidden');
+                generateBtn.querySelector('#btn-loading').classList.add('hidden');
+            }
+        });
+
+    </script>
+</body>
+</html>
