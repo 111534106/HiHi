@@ -1,6 +1,7 @@
-// api/generate.js - 最終穩定版（已修正 officeParser.parse 問題）
+// api/generate.js - 最終穩定版（支援 docx/pdf，無 Python 依賴）
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { parseOffice } from "officeparser";  // 關鍵：使用 { parseOffice }
+import mammoth from "mammoth";
+import pdf from "pdf-parse";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
@@ -56,6 +57,23 @@ async function callGeminiWithRetryAndFallback(message, retries = 3) {
   }
 }
 
+// 解析檔案（支援 .docx 和 .pdf）
+async function parseFile(buffer, fileName) {
+  const ext = fileName.split('.').pop().toLowerCase();
+
+  if (ext === 'docx') {
+    const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+    return result.value;
+  }
+
+  if (ext === 'pdf') {
+    const data = await pdf(buffer);
+    return data.text;
+  }
+
+  throw new Error(`不支援的檔案格式：.${ext}（僅支援 .docx 和 .pdf）`);
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: '僅支援 POST' });
@@ -65,21 +83,21 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'GOOGLE_API_KEY 未設定' });
   }
 
-  const { topic, fileBase64 = '', pageCount = 5, richness = 'balanced' } = req.body;
+  const { topic, fileBase64 = '', fileName = '', pageCount = 5, richness = 'balanced' } = req.body;
 
   if (!topic) {
     return res.status(400).json({ error: '請提供主題' });
   }
 
-  // 處理檔案上傳（正確使用 parseOffice）
+  // 處理檔案上傳
   let contextText = '';
-  if (fileBase64) {
+  if (fileBase64 && fileName) {
     try {
       const buffer = Buffer.from(fileBase64.split(',')[1], 'base64');
-      const text = await parseOffice(buffer);  // 正確函數！
-      contextText = text.trim();
+      contextText = await parseFile(buffer, fileName);
+      contextText = contextText.trim();
     } catch (e) {
-      console.error('檔案解析錯誤:', e);
+      console.error('檔案解析錯誤:', e.message);
       return res.status(400).json({ error: '檔案解析失敗：' + e.message });
     }
   }
@@ -99,7 +117,6 @@ export default async function handler(req, res) {
     const result = await callGeminiWithRetryAndFallback(userMessage);
     let text = result.response.text();
 
-    // 清理 ```json 包裝
     text = text.replace(/^```json\s*/i, '').replace(/```$/g, '').trim();
 
     let data;
