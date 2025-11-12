@@ -1,117 +1,81 @@
-import express from "express";
+// api/generate.js - Vercel Serverless Function（無需 express）
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const router = express.Router();
-
-// === 🔑 你的 Google Gemini API 金鑰 ===
-// 請確保在環境變數中設置 GOOGLE_API_KEY
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
-// === 🧠 系統提示：讓 AI 知道如何產出格式 ===
 const aiSystemInstruction = `
-你是一個簡報內容生成助理，請根據主題生成最多 20 頁投影片資料。
-每一頁都應包含：
-{
-  "title": "投影片標題",
-  "bullets": ["重點1", "重點2", "重點3"],
-  "notes": "講者筆記"
-}
-請只輸出純 JSON 格式，不要包含多餘文字或代碼框。
-`;
+你是一個專業簡報設計師。根據主題與補充資料，生成 1-20 頁投影片。
+每頁包含：
+- title: 投影片標題
+- bullets: 2~5 個重點（陣列）
+- notes: 講者備註（選填）
 
-// === 🚀 自動重試功能（處理 503 / 429 錯誤）===
-async function safeSendMessage(chat, msg, retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await chat.sendMessage(msg, { temperature: 0.4 });
-    } catch (err) {
-      const errorMsg = String(err);
-      if (errorMsg.includes("503") || errorMsg.includes("429")) {
-        console.warn(`⚠️ 模型過載，等待 2 秒後重試 (${i + 1}/${retries})`);
-        await new Promise(r => setTimeout(r, 2000));
-      } else {
-        throw err;
-      }
-    }
-  }
-  throw new Error("伺服器忙碌，請稍後再試。");
-}
-
-// === 🧩 主邏輯：生成簡報內容 ===
-router.post("/", async (req, res) => {
-  try {
-    const { topic } = req.body;
-    if (!topic) {
-      return res.status(400).json({ error: "請提供主題 (topic)。" });
-    }
-
-    // 初始化模型
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: aiSystemInstruction,
-      generationConfig: {
-        responseMimeType: "application/json",
-        maxOutputTokens: 3000
-      },
-    });
-
-    const chat = model.startChat();
-
-    const userMessage = `
-請根據主題「${topic}」生成投影片內容。
-最多 20 頁，格式嚴格遵守以下 JSON 結構：
-
+輸出純 JSON：
 {
   "slides": [
     {
-      "title": "投影片標題",
-      "bullets": ["重點1", "重點2", "重點3"],
-      "notes": "講者筆記"
+      "title": "標題",
+      "bullets": ["重點1", "重點2"],
+      "notes": "講者說..."
     }
   ]
 }
-
-請只輸出 JSON，不要包含其他說明或文字。
 `;
 
-    // 呼叫模型（含重試機制）
-    const result = await safeSendMessage(chat, userMessage);
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: '僅支援 POST' });
+  }
 
-    // === 🧹 清理文字 ===
-    let rawText = result.response.text();
-    rawText = rawText
-      .replace(/^```json\s*/i, "")
-      .replace(/```$/, "")
-      .replace(/```/g, "")
-      .replace(/[\u0000-\u001F]+/g, "")
-      .trim();
+  if (!process.env.GOOGLE_API_KEY) {
+    return res.status(500).json({ error: 'GOOGLE_API_KEY 未設定' });
+  }
 
-    // === 🧠 嘗試解析 JSON ===
+  const { topic, contextText = '', pageCount = 5, richness = 'balanced' } = req.body;
+
+  if (!topic) {
+    return res.status(400).json({ error: '請提供主題' });
+  }
+
+  const pages = Math.max(1, Math.min(pageCount, 20));
+  const richnessPrompt = richness === 'concise' ? '精簡' : richness === 'verbose' ? '詳細' : '適中';
+
+  const userMessage = `
+主題：${topic}
+補充資料：${contextText || '無'}
+頁數：${pages}
+豐富度：${richnessPrompt}
+請生成 ${pages} 頁投影片，嚴格遵循 JSON 格式。
+`;
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      systemInstruction: aiSystemInstruction,
+      generationConfig: { responseMimeType: "application/json" }
+    });
+
+    const result = await model.generateContent(userMessage);
+    let text = result.response.text();
+
+    // 清理 ```json 包裝
+    text = text.replace(/^```json\s*/i, '').replace(/```$/g, '').trim();
+
     let data;
     try {
-      data = JSON.parse(rawText);
+      data = JSON.parse(text);
     } catch (e) {
-      console.warn("⚠️ AI 回傳格式錯誤，自動修正中...");
-      const fixed = rawText
-        .replace(/(\w+):/g, '"$1":')
-        .replace(/'/g, '"')
-        .replace(/,(\s*[}\]])/g, "$1"); // 移除多餘逗號
-      data = JSON.parse(fixed);
+      return res.status(500).json({ ok: false, raw: text, warning: 'JSON 解析失敗' });
     }
 
-    // === 📏 限制頁數 ===
-    if (data.slides && data.slides.length > 20) {
-      data.slides = data.slides.slice(0, 20);
+    if (!data.slides || !Array.isArray(data.slides)) {
+      return res.status(500).json({ ok: false, raw: text, warning: '格式錯誤' });
     }
 
-    return res.json(data);
+    res.status(200).json({ ok: true, slides: data.slides.slice(0, 20) });
 
   } catch (error) {
-    console.error("❌ 伺服器錯誤：", error);
-    return res.status(500).json({
-      error: error.message || "伺服器發生未知錯誤。"
-    });
+    console.error('AI 錯誤:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
   }
-});
-
-export default router;
+}
