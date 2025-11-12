@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AI 簡報產生器 (v6)</title>
-  <meta name="description" content="AI 一鍵生成投影片 + PDF/PPT 下載 + txt/docx/pdf 上傳" />
+  <title>AI 簡報產生器 (v7)</title>
+  <meta name="description" content="AI 一鍵生成投影片 + 完美 PDF/PPT 下載" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root{
@@ -76,13 +76,13 @@
       <div class="topbar">
         <div>
           <h1>AI 簡報產生器</h1>
-          <div class="small">支援 .txt / .docx / .pdf 上傳 + PDF/PPT 下載</div>
+          <div class="small">支援 .txt / .docx / .pdf 上傳 + 完美 PDF/PPT 下載</div>
         </div>
         <div class="small">Max 20 頁</div>
       </div>
 
       <label>簡報主題（必填）</label>
-      <input id="topic" type="text" placeholder="例如：AI 對未來工作的影響" />
+      <input id="topic" type="text" placeholder="例如：黃子鵬" />
 
       <label>補充資料（選填）</label>
       <textarea id="contextText" placeholder="可貼上文章、會議紀錄或重點摘要..."></textarea>
@@ -117,7 +117,7 @@
       <div id="status" class="status"></div>
 
       <div style="margin-top:12px" class="small">
-        <strong>小提示：</strong> 上傳檔案會自動提取文字作為補充資料。
+        <strong>小提示：</strong> 下載的 PDF 與 PPT 內容完全一致，無亂碼。
       </div>
     </div>
 
@@ -176,7 +176,6 @@
       let slides = [];
       let currentIndex = 0;
 
-      // 讀取檔案為 base64
       async function readFileAsBase64(file) {
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -186,7 +185,6 @@
         });
       }
 
-      // 顯示進度
       function showProgress(percent) {
         document.querySelector('.progress-bar').style.display = 'block';
         progressBar.style.width = percent + '%';
@@ -195,18 +193,15 @@
         document.querySelector('.progress-bar').style.display = 'none';
       }
 
-      // 顯示狀態
       function showStatus(msg, isError = false) {
         statusEl.textContent = msg;
         statusEl.style.color = isError ? '#ef4444' : 'var(--muted)';
       }
 
-      // 顯示 spinner
       function showSpinner(show) {
         spinner.style.display = show ? 'inline-block' : 'none';
       }
 
-      // 渲染單頁
       function renderSlide(idx) {
         if (!slides || slides.length === 0) return;
         slidesContainer.innerHTML = '';
@@ -225,11 +220,6 @@
             ul.appendChild(li);
           });
           div.appendChild(ul);
-        } else {
-          const p = document.createElement('div');
-          p.className = 'small';
-          p.textContent = '(無要點)';
-          div.appendChild(p);
         }
 
         if (s.notes) {
@@ -244,7 +234,6 @@
         pageIndicator.textContent = `第 ${idx+1} / ${slides.length} 頁`;
       }
 
-      // 顯示所有 slides
       function showSlides(mySlides){
         slides = Array.isArray(mySlides) ? mySlides : [];
         if (slides.length === 0){
@@ -273,7 +262,6 @@
         exportButtons.appendChild(pptBtn);
       }
 
-      // 匯出檔案
       async function exportFile(format) {
         showStatus('正在產生檔案中...');
         try {
@@ -287,7 +275,7 @@
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `簡報.${format === 'pptx' ? 'pptx' : 'pdf'}`;
+          a.download = `簡報.${format}`;
           a.click();
           URL.revokeObjectURL(url);
           showStatus('匯出成功！');
@@ -296,130 +284,67 @@
         }
       }
 
-      // 頁碼控制
       prevPageBtn.addEventListener('click', () => {
-        if (currentIndex > 0) {
-          currentIndex--;
-          renderSlide(currentIndex);
-        }
+        if (currentIndex > 0) { currentIndex--; renderSlide(currentIndex); }
       });
       nextPageBtn.addEventListener('click', () => {
-        if (currentIndex < slides.length - 1) {
-          currentIndex++;
-          renderSlide(currentIndex);
-        }
+        if (currentIndex < slides.length - 1) { currentIndex++; renderSlide(currentIndex); }
       });
 
-      // 清除
       clearBtn.addEventListener('click', () => {
-        topicEl.value = '';
-        contextEl.value = '';
-        fileInput.value = '';
-        fileInfo.textContent = '';
-        pageCountEl.value = 5;
-        richnessEl.value = 'balanced';
-        slidesContainer.innerHTML = '';
-        slides = [];
-        emptyNotice.style.display = 'block';
-        pagerControls.style.display = 'none';
-        exportButtons.style.display = 'none';
-        rawBox.style.display = 'none';
-        showStatus('');
-        hideProgress();
+        topicEl.value = ''; contextEl.value = ''; fileInput.value = ''; fileInfo.textContent = '';
+        pageCountEl.value = 5; richnessEl.value = 'balanced';
+        slides = []; emptyNotice.style.display = 'block'; pagerControls.style.display = 'none';
+        exportButtons.style.display = 'none'; rawBox.style.display = 'none'; showStatus(''); hideProgress();
       });
 
-      // 檔案變更
       fileInput.addEventListener('change', () => {
         const file = fileInput.files[0];
-        if (file) {
-          fileInfo.textContent = `已選取：${file.name} (${(file.size/1024).toFixed(1)} KB)`;
-        } else {
-          fileInfo.textContent = '';
-        }
+        fileInfo.textContent = file ? `已選取：${file.name} (${(file.size/1024).toFixed(1)} KB)` : '';
       });
 
-      // 生成按鈕
       generateBtn.addEventListener('click', async () => {
-        showStatus('');
-        rawBox.style.display = 'none';
+        showStatus(''); rawBox.style.display = 'none';
         const topic = topicEl.value.trim();
-        if (!topic) {
-          showStatus('請輸入簡報主題。', true);
-          return;
-        }
-        let pageCount = parseInt(pageCountEl.value) || 5;
-        pageCount = Math.max(1, Math.min(pageCount, 20));
+        if (!topic) { showStatus('請輸入簡報主題。', true); return; }
+        let pageCount = Math.max(1, Math.min(parseInt(pageCountEl.value) || 5, 20));
         const richness = richnessEl.value || 'balanced';
 
-        let fileBase64 = '';
-        let fileName = '';
+        let fileBase64 = '', fileName = '';
         const file = fileInput.files[0];
         if (file) {
           showProgress(10);
-          try {
-            fileBase64 = await readFileAsBase64(file);
-            fileName = file.name;
-            showProgress(30);
-          } catch (e) {
-            showStatus('檔案讀取失敗。', true);
-            return;
-          }
+          try { fileBase64 = await readFileAsBase64(file); fileName = file.name; showProgress(30); }
+          catch (e) { showStatus('檔案讀取失敗。', true); return; }
         }
 
-        generateBtn.disabled = true;
-        showSpinner(true);
-        showProgress(50);
-        showStatus('正在請求 AI 生成中...');
+        generateBtn.disabled = true; showSpinner(true); showProgress(50); showStatus('正在請求 AI 生成中...');
 
         try {
-          const payload = { 
-            topic, 
-            fileBase64, 
-            fileName: fileName || '',  // 安全傳遞
-            pageCount, 
-            richness 
-          };
-          const resp = await fetch('/api/generate', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-          });
-
+          const payload = { topic, fileBase64, fileName: fileName || '', pageCount, richness };
+          const resp = await fetch('/api/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
           showProgress(80);
           const text = await resp.text();
-          let json;
-          try { json = JSON.parse(text); } catch(e) { json = null; }
+          let json; try { json = JSON.parse(text); } catch(e) { json = null; }
 
           if (!resp.ok) {
             let msg = `伺服器錯誤：${resp.status}`;
             if (json && json.error) msg += ' — ' + json.error;
-            showStatus(msg, true);
-            rawText.textContent = text;
-            rawBox.style.display = 'block';
-            return;
+            showStatus(msg, true); rawText.textContent = text; rawBox.style.display = 'block'; return;
           }
 
-          if (json && json.ok === true && Array.isArray(json.slides)) {
-            showStatus('生成完成！');
-            showSlides(json.slides);
-            showProgress(100);
-            setTimeout(hideProgress, 500);
+          if (json && json.ok && Array.isArray(json.slides)) {
+            showStatus('生成完成！'); showSlides(json.slides); showProgress(100); setTimeout(hideProgress, 500);
           } else {
-            showStatus('生成失敗，回傳格式錯誤。', true);
-            rawText.textContent = text;
-            rawBox.style.display = 'block';
+            showStatus('生成失敗，回傳格式錯誤。', true); rawText.textContent = text; rawBox.style.display = 'block';
           }
-
         } catch (err) {
-          console.error(err);
           showStatus('發生錯誤：' + (err.message || err), true);
         } finally {
-          generateBtn.disabled = false;
-          showSpinner(false);
+          generateBtn.disabled = false; showSpinner(false);
         }
       });
 
-      // 初始狀態
       emptyNotice.style.display = 'block';
     })();
   </script>
