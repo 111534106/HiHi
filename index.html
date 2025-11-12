@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 簡報產生器 (v2)</title>
     <!-- 載入 Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <link href="[https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap)" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', 'Noto Sans TC', sans-serif;
@@ -35,18 +35,11 @@
             100% { transform: rotate(360deg); }
         }
         
-        /* [!! 新增 !!] 用於「內容豐富度」的選項樣式 */
-        .richness-label {
-            @apply block w-full cursor-pointer rounded-lg border border-gray-300 p-3 text-center text-sm font-medium text-gray-700 transition duration-150;
-        }
-        /* 當 radio 被選中時，label 的樣式 */
-        input[type="radio"]:checked + .richness-label {
-            @apply border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-500;
-        }
-        /* 隱藏真正的 radio an */
+        /* [!! 修正 !!] 隱藏真正的 radio */
         input[type="radio"].richness-radio {
             display: none;
         }
+        /* 點選的樣式 (peer-checked) 現在已直接寫在 HTML 的 class 中 */
 
     </style>
 </head>
@@ -77,7 +70,7 @@
             </div>
         </div>
         
-        <!-- [!! 新增 !!] 頁數 和 豐富度 選項 -->
+        <!-- [!! 修正 !!] 頁數 和 豐富度 選項 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
                 <label for="page-count" class="block text-sm font-medium text-gray-700 mb-1">希望頁數</label>
@@ -92,17 +85,30 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">內容豐富度</label>
                 <div class="grid grid-cols-3 gap-2">
+                    <!-- [!! 修正 !!] 加上 peer 和 peer-checked 樣式 -->
                     <div>
-                        <input type="radio" name="richness" id="richness-concise" value="精簡" class="richness-radio">
-                        <label for="richness-concise" class="richness-label">精簡</label>
+                        <input type="radio" name="richness" id="richness-concise" value="精簡" class="richness-radio peer">
+                        <label for="richness-concise" 
+                               class="block w-full cursor-pointer rounded-lg border border-gray-300 p-3 text-center text-sm font-medium text-gray-700 transition duration-150
+                                      peer-checked:border-blue-600 peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:ring-2 peer-checked:ring-blue-500">
+                            精簡
+                        </label>
                     </div>
                     <div>
-                        <input type="radio" name="richness" id="richness-medium" value="適中" class="richness-radio" checked>
-                        <label for="richness-medium" class="richness-label">適中</label>
+                        <input type="radio" name="richness" id="richness-medium" value="適中" class="richness-radio peer" checked>
+                        <label for="richness-medium" 
+                               class="block w-full cursor-pointer rounded-lg border border-gray-300 p-3 text-center text-sm font-medium text-gray-700 transition duration-150
+                                      peer-checked:border-blue-600 peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:ring-2 peer-checked:ring-blue-500">
+                            適中
+                        </label>
                     </div>
                     <div>
-                        <input type="radio" name="richness" id="richness-rich" value="豐富" class="richness-radio">
-                        <label for="richness-rich" class="richness-label">豐富</label>
+                        <input type="radio" name="richness" id="richness-rich" value="豐富" class="richness-radio peer">
+                        <label for="richness-rich"
+                               class="block w-full cursor-pointer rounded-lg border border-gray-300 p-3 text-center text-sm font-medium text-gray-700 transition duration-150
+                                      peer-checked:border-blue-600 peer-checked:bg-blue-50 peer-checked:text-blue-700 peer-checked:ring-2 peer-checked:ring-blue-500">
+                            豐富
+                        </label>
                     </div>
                 </div>
             </div>
@@ -252,7 +258,7 @@
                 }
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    contextInput.value = e.target.result; // Tien Ru Wen Zi Kuang
+                    contextInput.value = e.target.result; // 填入文字框
                 };
                 reader.onerror = (e) => { alert("檔案讀取失敗。"); };
                 reader.readAsText(file);
