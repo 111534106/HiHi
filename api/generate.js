@@ -3,9 +3,6 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// 1. 取得你儲存在 Vercel 的 API 金鑰
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 // 2. [!! AI 升級 !!] AI 提示 (System Instruction)
 //    我們告訴 AI 如何處理新的選項
 const aiSystemInstruction = `
@@ -21,7 +18,7 @@ const aiSystemInstruction = `
 
 [ 優先級 ]
 - 如果使用者提供了「現有資料」（context），請你**必須**以這份資料為**主要**內容來進行總結和整理，生成簡報。
-- 如果使用者沒有提供「現有資料」，你才根據「主題」自行發揮。
+- 如果使用者沒有提供「現V資料」，你才根據「主題」自行發揮。
 
 [ 輸出格式 ]
 你必須總是回傳嚴格的 JSON 格式。
@@ -55,12 +52,18 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: '僅允許 POST 方法' });
     }
 
-    // 檢查金鑰是否存在
-    if (!process.env.GEMINI_API_KEY) {
-        return res.status(500).json({ error: '伺服器金鑰尚未設定 (GEMINI_API_KEY is missing)' });
-    }
-
     try {
+        // [!! 修正 v8 !!] 
+        // 檢查金鑰是否存在，如果不存在，就回傳一個*標準的 JSON 錯誤*
+        if (!process.env.GEMINI_API_KEY) {
+            console.error("Vercel 環境變數 'GEMINI_API_KEY' 尚未設定。");
+            return res.status(500).json({ error: '伺服器金鑰尚未設定 (GEMINI_API_KEY is missing)' });
+        }
+        
+        // [!! 修正 v8 !!] 
+        // 只有在金鑰存在時，才初始化 genAI
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
         // [!! 修改 !!] 取得所有新選項
         const { topic, context, pageCount, richness } = req.body;
 
