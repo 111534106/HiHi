@@ -1,11 +1,14 @@
 {
   "name": "ai-presenter-cloud",
-  "version": "1.0.0",
-  "description": "AI 簡報產生器的 Vercel 後端",
+  "version": "2.0.0",
+  "description": "AI 簡報產生器（升級版：支援 PDF/PPT 下載 + 多格式上傳 + rate limit）",
   "main": "api/generate.js",
   "type": "module",
   "dependencies": {
     "@google/generative-ai": "^0.23.0",
-    "express": "^4.19.2"
+    "pdfkit": "^0.17.2",
+    "pptxgenjs": "^3.13.1",
+    "officeparser": "^5.2.1",
+    "@vercel/kv": "^1.1.0"
   }
 }
