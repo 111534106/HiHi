@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AI 簡報產生器 (v8)</title>
-  <meta name="description" content="AI 一鍵生成投影片 + 完美 PDF/PPT 下載" />
+  <title>AI 簡報產生器 (v9)</title>
+  <meta name="description" content="AI 一鍵生成投影片 + PPTX 下載" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root{
@@ -76,7 +76,7 @@
       <div class="topbar">
         <div>
           <h1>AI 簡報產生器</h1>
-          <div class="small">支援 .txt / .docx / .pdf 上傳 + 完美 PDF/PPT 下載</div>
+          <div class="small">支援 .txt / .docx / .pdf 上傳 + PPTX 下載</div>
         </div>
         <div class="small">Max 20 頁</div>
       </div>
@@ -117,7 +117,7 @@
       <div id="status" class="status"></div>
 
       <div style="margin-top:12px" class="small">
-        <strong>小提示：</strong> 檔案上傳後會自動提取文字，PDF/PPT 下載無亂碼。
+        <strong>小提示：</strong> 上傳檔案會自動提取文字，僅支援 PPTX 下載。
       </div>
     </div>
 
@@ -128,7 +128,9 @@
           <h2 style="margin:0">生成結果</h2>
           <div class="small">模型會回傳每頁標題、要點與備註</div>
         </div>
-        <div id="exportButtons" style="display:none"></div>
+        <div id="exportButtons" style="display:none">
+          <button class="download" id="downloadPptx">下載 PPTX</button>
+        </div>
       </div>
 
       <div id="resultArea" class="preview">
@@ -171,6 +173,7 @@
       const rawBox = document.getElementById('rawBox');
       const rawText = document.getElementById('rawText');
       const exportButtons = document.getElementById('exportButtons');
+      const downloadPptx = document.getElementById('downloadPptx');
 
       let slides = [];
       let currentIndex = 0;
@@ -210,24 +213,22 @@
         if (!slides.length) { slidesContainer.style.display = pagerControls.style.display = 'none'; emptyNotice.style.display = 'block'; exportButtons.style.display = 'none'; return; }
         emptyNotice.style.display = 'none'; slidesContainer.style.display = 'block'; pagerControls.style.display = 'flex'; rawBox.style.display = 'none';
         currentIndex = 0; renderSlide(0);
-        exportButtons.style.display = 'flex'; exportButtons.innerHTML = '';
-        ['pdf', 'pptx'].forEach(f => {
-          const btn = document.createElement('button'); btn.className = 'download'; btn.textContent = `下載 ${f.toUpperCase()}`; btn.onclick = () => exportFile(f); exportButtons.appendChild(btn);
-        });
+        exportButtons.style.display = 'flex';
       }
 
-      async function exportFile(fmt) {
-        showStatus('產生中...');
+      async function exportFile() {
+        showStatus('產生 PPTX 中...');
         try {
-          const r = await fetch('/api/export', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ slides, format: fmt }) });
+          const r = await fetch('/api/export', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ slides }) });
           if (!r.ok) throw new Error('失敗'); const blob = await r.blob();
-          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `簡報.${fmt}`; a.click(); URL.revokeObjectURL(a.href);
-          showStatus('成功！');
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '簡報.pptx'; a.click(); URL.revokeObjectURL(a.href);
+          showStatus('下載完成！');
         } catch (e) { showStatus('失敗：' + e.message, true); }
       }
 
       prevPageBtn.onclick = () => { if (currentIndex > 0) { currentIndex--; renderSlide(currentIndex); } };
       nextPageBtn.onclick = () => { if (currentIndex < slides.length - 1) { currentIndex++; renderSlide(currentIndex); } };
+      downloadPptx.onclick = exportFile;
 
       clearBtn.onclick = () => {
         topicEl.value = ''; fileInput.value = ''; fileInfo.textContent = ''; pageCountEl.value = 5; richnessEl.value = 'balanced';
