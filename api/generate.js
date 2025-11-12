@@ -1,6 +1,6 @@
-// api/generate.js - 完整修正版（無 Rate Limiting + officeParser.parse 修正）
+// api/generate.js - 最終穩定版（已修正 officeParser.parse 問題）
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import officeParser from "officeparser";
+import { parseOffice } from "officeparser";  // 關鍵：使用 { parseOffice }
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
@@ -71,12 +71,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: '請提供主題' });
   }
 
-  // 處理檔案上傳（關鍵修正：使用 .parse()）
+  // 處理檔案上傳（正確使用 parseOffice）
   let contextText = '';
   if (fileBase64) {
     try {
       const buffer = Buffer.from(fileBase64.split(',')[1], 'base64');
-      const text = await officeParser.parse(buffer);  // 修正：使用 .parse()
+      const text = await parseOffice(buffer);  // 正確函數！
       contextText = text.trim();
     } catch (e) {
       console.error('檔案解析錯誤:', e);
