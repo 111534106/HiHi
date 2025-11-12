@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AI 簡報產生器 (v7)</title>
+  <title>AI 簡報產生器 (v8)</title>
   <meta name="description" content="AI 一鍵生成投影片 + 完美 PDF/PPT 下載" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
@@ -117,7 +117,7 @@
       <div id="status" class="status"></div>
 
       <div style="margin-top:12px" class="small">
-        <strong>小提示：</strong> 下載的 PDF 與 PPT 內容完全一致，無亂碼。
+        <strong>小提示：</strong> 檔案上傳後會自動提取文字，PDF/PPT 下載無亂碼。
       </div>
     </div>
 
@@ -153,7 +153,6 @@
   <script>
     (function(){
       const topicEl = document.getElementById('topic');
-      const contextEl = document.getElementById('contextText');
       const fileInput = document.getElementById('fileInput');
       const fileInfo = document.getElementById('fileInfo');
       const pageCountEl = document.getElementById('pageCount');
@@ -185,129 +184,65 @@
         });
       }
 
-      function showProgress(percent) {
-        document.querySelector('.progress-bar').style.display = 'block';
-        progressBar.style.width = percent + '%';
-      }
-      function hideProgress() {
-        document.querySelector('.progress-bar').style.display = 'none';
-      }
+      function showProgress(p) { document.querySelector('.progress-bar').style.display = 'block'; progressBar.style.width = p + '%'; }
+      function hideProgress() { document.querySelector('.progress-bar').style.display = 'none'; }
+      function showStatus(msg, err = false) { statusEl.textContent = msg; statusEl.style.color = err ? '#ef4444' : 'var(--muted)'; }
+      function showSpinner(s) { spinner.style.display = s ? 'inline-block' : 'none'; }
 
-      function showStatus(msg, isError = false) {
-        statusEl.textContent = msg;
-        statusEl.style.color = isError ? '#ef4444' : 'var(--muted)';
-      }
-
-      function showSpinner(show) {
-        spinner.style.display = show ? 'inline-block' : 'none';
-      }
-
-      function renderSlide(idx) {
-        if (!slides || slides.length === 0) return;
+      function renderSlide(i) {
+        if (!slides.length) return;
         slidesContainer.innerHTML = '';
-        const s = slides[idx];
-        const div = document.createElement('div');
-        div.className = 'slide';
-        const title = document.createElement('h3');
-        title.textContent = s.title || ('第 ' + (idx+1) + ' 頁');
-        div.appendChild(title);
-
-        if (Array.isArray(s.bullets) && s.bullets.length > 0){
+        const s = slides[i];
+        const div = document.createElement('div'); div.className = 'slide';
+        const h3 = document.createElement('h3'); h3.textContent = s.title || `第 ${i+1} 頁`; div.appendChild(h3);
+        if (Array.isArray(s.bullets) && s.bullets.length) {
           const ul = document.createElement('ul');
-          s.bullets.forEach(b => {
-            const li = document.createElement('li');
-            li.textContent = b;
-            ul.appendChild(li);
-          });
+          s.bullets.forEach(b => { const li = document.createElement('li'); li.textContent = b; ul.appendChild(li); });
           div.appendChild(ul);
         }
-
-        if (s.notes) {
-          const notes = document.createElement('div');
-          notes.className = 'small';
-          notes.style.marginTop = '8px';
-          notes.textContent = '備註：' + s.notes;
-          div.appendChild(notes);
-        }
-
+        if (s.notes) { const n = document.createElement('div'); n.className = 'small'; n.style.marginTop = '8px'; n.textContent = '備註：' + s.notes; div.appendChild(n); }
         slidesContainer.appendChild(div);
-        pageIndicator.textContent = `第 ${idx+1} / ${slides.length} 頁`;
+        pageIndicator.textContent = `第 ${i+1} / ${slides.length} 頁`;
       }
 
-      function showSlides(mySlides){
-        slides = Array.isArray(mySlides) ? mySlides : [];
-        if (slides.length === 0){
-          slidesContainer.style.display = 'none';
-          pagerControls.style.display = 'none';
-          emptyNotice.style.display = 'block';
-          exportButtons.style.display = 'none';
-          return;
-        }
-        emptyNotice.style.display = 'none';
-        slidesContainer.style.display = 'block';
-        pagerControls.style.display = 'flex';
-        rawBox.style.display = 'none';
-        currentIndex = 0;
-        renderSlide(currentIndex);
-        exportButtons.style.display = 'flex';
-        exportButtons.innerHTML = '';
-        const pdfBtn = document.createElement('button');
-        pdfBtn.className = 'download';
-        pdfBtn.textContent = '下載 PDF';
-        pdfBtn.onclick = () => exportFile('pdf');
-        exportButtons.appendChild(pdfBtn);
-        const pptBtn = pdfBtn.cloneNode(true);
-        pptBtn.textContent = '下載 PPT';
-        pptBtn.onclick = () => exportFile('pptx');
-        exportButtons.appendChild(pptBtn);
+      function showSlides(data) {
+        slides = Array.isArray(data) ? data : [];
+        if (!slides.length) { slidesContainer.style.display = pagerControls.style.display = 'none'; emptyNotice.style.display = 'block'; exportButtons.style.display = 'none'; return; }
+        emptyNotice.style.display = 'none'; slidesContainer.style.display = 'block'; pagerControls.style.display = 'flex'; rawBox.style.display = 'none';
+        currentIndex = 0; renderSlide(0);
+        exportButtons.style.display = 'flex'; exportButtons.innerHTML = '';
+        ['pdf', 'pptx'].forEach(f => {
+          const btn = document.createElement('button'); btn.className = 'download'; btn.textContent = `下載 ${f.toUpperCase()}`; btn.onclick = () => exportFile(f); exportButtons.appendChild(btn);
+        });
       }
 
-      async function exportFile(format) {
-        showStatus('正在產生檔案中...');
+      async function exportFile(fmt) {
+        showStatus('產生中...');
         try {
-          const resp = await fetch('/api/export', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ slides, format })
-          });
-          if (!resp.ok) throw new Error('匯出失敗');
-          const blob = await resp.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `簡報.${format}`;
-          a.click();
-          URL.revokeObjectURL(url);
-          showStatus('匯出成功！');
-        } catch (e) {
-          showStatus('匯出失敗：' + e.message, true);
-        }
+          const r = await fetch('/api/export', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ slides, format: fmt }) });
+          if (!r.ok) throw new Error('失敗'); const blob = await r.blob();
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `簡報.${fmt}`; a.click(); URL.revokeObjectURL(a.href);
+          showStatus('成功！');
+        } catch (e) { showStatus('失敗：' + e.message, true); }
       }
 
-      prevPageBtn.addEventListener('click', () => {
-        if (currentIndex > 0) { currentIndex--; renderSlide(currentIndex); }
-      });
-      nextPageBtn.addEventListener('click', () => {
-        if (currentIndex < slides.length - 1) { currentIndex++; renderSlide(currentIndex); }
-      });
+      prevPageBtn.onclick = () => { if (currentIndex > 0) { currentIndex--; renderSlide(currentIndex); } };
+      nextPageBtn.onclick = () => { if (currentIndex < slides.length - 1) { currentIndex++; renderSlide(currentIndex); } };
 
-      clearBtn.addEventListener('click', () => {
-        topicEl.value = ''; contextEl.value = ''; fileInput.value = ''; fileInfo.textContent = '';
-        pageCountEl.value = 5; richnessEl.value = 'balanced';
-        slides = []; emptyNotice.style.display = 'block'; pagerControls.style.display = 'none';
-        exportButtons.style.display = 'none'; rawBox.style.display = 'none'; showStatus(''); hideProgress();
-      });
+      clearBtn.onclick = () => {
+        topicEl.value = ''; fileInput.value = ''; fileInfo.textContent = ''; pageCountEl.value = 5; richnessEl.value = 'balanced';
+        slides = []; emptyNotice.style.display = 'block'; pagerControls.style.display = exportButtons.style.display = 'none'; showStatus(''); hideProgress();
+      };
 
-      fileInput.addEventListener('change', () => {
-        const file = fileInput.files[0];
-        fileInfo.textContent = file ? `已選取：${file.name} (${(file.size/1024).toFixed(1)} KB)` : '';
-      });
+      fileInput.onchange = () => {
+        const f = fileInput.files[0];
+        fileInfo.textContent = f ? `已選取：${f.name} (${(f.size/1024).toFixed(1)} KB)` : '';
+      };
 
-      generateBtn.addEventListener('click', async () => {
+      generateBtn.onclick = async () => {
         showStatus(''); rawBox.style.display = 'none';
-        const topic = topicEl.value.trim();
-        if (!topic) { showStatus('請輸入簡報主題。', true); return; }
-        let pageCount = Math.max(1, Math.min(parseInt(pageCountEl.value) || 5, 20));
+        const topic = topicEl.value.trim(); if (!topic) return showStatus('請輸入主題', true);
+        const pageCount = Math.max(1, Math.min(parseInt(pageCountEl.value) || 5, 20));
         const richness = richnessEl.value || 'balanced';
 
         let fileBase64 = '', fileName = '';
@@ -315,35 +250,34 @@
         if (file) {
           showProgress(10);
           try { fileBase64 = await readFileAsBase64(file); fileName = file.name; showProgress(30); }
-          catch (e) { showStatus('檔案讀取失敗。', true); return; }
+          catch { return showStatus('讀檔失敗', true); }
         }
 
-        generateBtn.disabled = true; showSpinner(true); showProgress(50); showStatus('正在請求 AI 生成中...');
+        generateBtn.disabled = true; showSpinner(true); showProgress(50); showStatus('AI 生成中...');
 
         try {
           const payload = { topic, fileBase64, fileName: fileName || '', pageCount, richness };
           const resp = await fetch('/api/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
           showProgress(80);
           const text = await resp.text();
-          let json; try { json = JSON.parse(text); } catch(e) { json = null; }
+          let json; try { json = JSON.parse(text); } catch { json = null; }
 
           if (!resp.ok) {
-            let msg = `伺服器錯誤：${resp.status}`;
-            if (json && json.error) msg += ' — ' + json.error;
+            const msg = `錯誤：${resp.status}${json?.error ? ' — ' + json.error : ''}`;
             showStatus(msg, true); rawText.textContent = text; rawBox.style.display = 'block'; return;
           }
 
-          if (json && json.ok && Array.isArray(json.slides)) {
-            showStatus('生成完成！'); showSlides(json.slides); showProgress(100); setTimeout(hideProgress, 500);
+          if (json?.ok && Array.isArray(json.slides)) {
+            showStatus('完成！'); showSlides(json.slides); showProgress(100); setTimeout(hideProgress, 500);
           } else {
-            showStatus('生成失敗，回傳格式錯誤。', true); rawText.textContent = text; rawBox.style.display = 'block';
+            showStatus('格式錯誤', true); rawText.textContent = text; rawBox.style.display = 'block';
           }
-        } catch (err) {
-          showStatus('發生錯誤：' + (err.message || err), true);
+        } catch (e) {
+          showStatus('錯誤：' + e.message, true);
         } finally {
           generateBtn.disabled = false; showSpinner(false);
         }
-      });
+      };
 
       emptyNotice.style.display = 'block';
     })();
