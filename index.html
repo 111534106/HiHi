@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 簡報產生器 (v2)</title>
-    <!-- 載入 Tailwind CSS -->
+    
+    <!-- [!! 最終修正 !!] 修正了 Tailwind CSS 和 Google Fonts 的網址 -->
     <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
     <link href="[https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap)" rel="stylesheet">
+    
     <style>
         body {
             font-family: 'Inter', 'Noto Sans TC', sans-serif;
@@ -35,7 +37,7 @@
             100% { transform: rotate(360deg); }
         }
         
-        /* [!! 修正 !!] 隱藏真正的 radio */
+        /* 隱藏真正的 radio */
         input[type="radio"].richness-radio {
             display: none;
         }
@@ -70,7 +72,7 @@
             </div>
         </div>
         
-        <!-- [!! 修正 !!] 頁數 和 豐富度 選項 -->
+        <!-- 頁數 和 豐富度 選項 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
                 <label for="page-count" class="block text-sm font-medium text-gray-700 mb-1">希望頁數</label>
@@ -161,9 +163,7 @@
         const contextInput = document.getElementById('context-input');
         const fileInput = document.getElementById('file-input');
         
-        // [!! 新增 !!] 取得新選項的 DOM
         const pageCountSelect = document.getElementById('page-count');
-
         const loadingIndicator = document.getElementById('loading-indicator');
         const presentationContainer = document.getElementById('presentation-container');
         
