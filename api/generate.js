@@ -1,4 +1,4 @@
-// api/generate.js - 無 Rate Limiting 版（穩定運行）
+// api/generate.js - 完整修正版（無 Rate Limiting + officeParser.parse 修正）
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import officeParser from "officeparser";
 
@@ -71,14 +71,15 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: '請提供主題' });
   }
 
-  // 處理檔案上傳
+  // 處理檔案上傳（關鍵修正：使用 .parse()）
   let contextText = '';
   if (fileBase64) {
     try {
       const buffer = Buffer.from(fileBase64.split(',')[1], 'base64');
-      const text = await officeParser(buffer);
-      contextText = text;
+      const text = await officeParser.parse(buffer);  // 修正：使用 .parse()
+      contextText = text.trim();
     } catch (e) {
+      console.error('檔案解析錯誤:', e);
       return res.status(400).json({ error: '檔案解析失敗：' + e.message });
     }
   }
@@ -98,6 +99,7 @@ export default async function handler(req, res) {
     const result = await callGeminiWithRetryAndFallback(userMessage);
     let text = result.response.text();
 
+    // 清理 ```json 包裝
     text = text.replace(/^```json\s*/i, '').replace(/```$/g, '').trim();
 
     let data;
