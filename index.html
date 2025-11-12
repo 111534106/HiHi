@@ -4,127 +4,190 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>AI 簡報產生器 (v2)</title>
+  <meta name="description" content="把主題與資料丟給 AI，一鍵產生投影片要點" />
   <style>
     :root{
-      --bg:#f7f8fb;
-      --card:#fff;
-      --accent:#2563eb;
-      --muted:#666;
+      --bg:#0f1724; /* page bg */
+      --card:#0b1220;
+      --accent:#4f46e5; /* indigo */
+      --accent-2:#06b6d4; /* teal */
+      --muted:#94a3b8;
+      --text:#e6eef8;
+      --glass: rgba(255,255,255,0.03);
     }
     *{box-sizing:border-box}
     body{
       margin:0;
-      font-family:system-ui,-apple-system,"Segoe UI", Roboto,"Noto Sans TC", "Helvetica Neue", Arial;
-      background:var(--bg);
-      color:#111;
+      font-family: "Noto Sans TC", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(180deg, #071021 0%, #071829 100%);
+      color:var(--text);
       -webkit-font-smoothing:antialiased;
       -moz-osx-font-smoothing:grayscale;
+      min-height:100vh;
+      padding:28px;
     }
-    .container{
-      max-width:820px;
-      margin:28px auto;
-      background:var(--card);
-      padding:22px;
-      border-radius:10px;
-      box-shadow:0 6px 18px rgba(15,23,42,0.06);
-    }
-    h1{margin:0 0 12px;font-size:20px}
-    label{display:block;margin-top:12px;font-weight:600;font-size:14px}
-    input[type="text"], textarea, select{
+    .wrap{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:18px;border-radius:12px;box-shadow:0 6px 30px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
+    h1{margin:0 0 8px;font-size:20px}
+    .small{color:var(--muted);font-size:13px}
+    label{display:block;margin-top:12px;font-weight:600;font-size:14px;color:var(--text)}
+    input[type="text"], textarea, select, input[type="number"]{
       width:100%;
       padding:10px 12px;
-      margin-top:6px;
-      border:1px solid #e6e9ef;
+      margin-top:8px;
+      border:1px solid rgba(255,255,255,0.04);
+      background:var(--glass);
       border-radius:8px;
+      color:var(--text);
       font-size:14px;
-      background:#fff;
       resize:vertical;
     }
-    .radios{display:flex;gap:12px;margin-top:6px}
-    .radios label{font-weight:500}
-    .actions{display:flex;align-items:center;gap:12px;margin-top:14px}
-    button{
-      background:var(--accent);
-      color:#fff;
-      border:none;
-      padding:10px 14px;
-      border-radius:8px;
-      cursor:pointer;
-      font-weight:600;
+    textarea{min-height:120px}
+    .row{display:flex;gap:8px;align-items:center}
+    .radios{display:flex;gap:10px;margin-top:8px}
+    .radios label{font-weight:500;color:var(--text);font-size:13px}
+    .actions{display:flex;gap:10px;margin-top:14px;align-items:center}
+    button.primary{
+      background:linear-gradient(90deg,var(--accent),var(--accent-2));
+      color:white;border:none;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(79,70,229,0.18)
     }
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:10px;color:var(--text);cursor:pointer}
     button:disabled{opacity:0.6;cursor:default}
-    .spinner{
-      width:34px;height:34px;border-radius:50%;
-      border:4px solid rgba(0,0,0,0.08);
-      border-top-color:var(--accent);
-      animation:spin 1s linear infinite;
-    }
-    .hidden{display:none}
-    .status{margin-top:12px;color:var(--muted);font-size:14px}
-    .result{margin-top:18px}
-    #resultContent{white-space:pre-wrap;background:#fbfdff;border:1px solid #eef4ff;padding:12px;border-radius:8px}
-    .pager{display:flex;align-items:center;gap:8px;margin-top:10px}
-    .pager button{background:#e6eefc;color:var(--accent);padding:8px 10px;border-radius:6px;border:none}
+    .spinner{width:36px;height:36px;border-radius:50%;border:4px solid rgba(255,255,255,0.06);border-top-color:var(--accent);animation:spin 1s linear infinite}
     @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+    .status{margin-top:10px;color:var(--muted);font-size:14px}
+    .preview{padding:18px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));min-height:120px}
+    .slide{border:1px solid rgba(255,255,255,0.03);padding:18px;border-radius:10px;margin-bottom:12px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005))}
+    .slide h3{margin:0 0 8px;color:white}
+    .slide ul{margin:0 0 8px 18px}
+    .pager{display:flex;gap:8px;align-items:center;margin-top:8px}
+    .page-ind{font-weight:700;color:var(--accent)}
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .controls small{color:var(--muted);display:block;margin-top:6px}
+    .download{background:linear-gradient(90deg,#06b6d4,#3b82f6);padding:8px 12px;border-radius:8px;color:#04102a;border:none;cursor:pointer}
+    @media (max-width:920px){
+      .wrap{grid-template-columns:1fr; padding:0 8px}
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>AI 簡報產生器 (v2)</h1>
+  <div class="wrap">
+    <!-- 左側控制面板 -->
+    <div class="card">
+      <div class="topbar">
+        <div>
+          <h1>AI 簡報產生器</h1>
+          <div class="small">輸入主題與補充資料 → 一鍵生成投影片要點</div>
+        </div>
+        <div class="small">Max 20 頁</div>
+      </div>
 
-    <form id="reportForm">
-      <label>簡報主題 (必填)</label>
-      <input id="title" name="title" type="text" placeholder="例如：AI 對未來工作的影響" required />
+      <label>簡報主題（必填）</label>
+      <input id="topic" type="text" placeholder="例如：AI 對未來工作的影響" />
 
-      <label>貼上您的現有資料（選填）</label>
-      <textarea id="textData" name="textData" rows="6" placeholder="將您的筆記、草稿或任何相關文字貼在這裡..."></textarea>
+      <label>補充資料（選填）</label>
+      <textarea id="contextText" placeholder="可貼上文章、會議紀錄或重點摘要..."></textarea>
 
-      <label>或上傳 .txt 純文字檔案</label>
+      <label>或上傳 .txt 檔（選填）</label>
       <input id="fileInput" type="file" accept=".txt" />
 
-      <label>希望頁數</label>
-      <select id="pages" name="pages">
-        <option value="3">3 頁（精簡）</option>
-        <option value="5" selected>5 頁（標準）</option>
-        <option value="7">7 頁（詳細）</option>
-      </select>
-
-      <label>內容豐富度</label>
-      <div class="radios">
-        <label><input type="radio" name="richness" value="concise" checked/> 精簡</label>
-        <label><input type="radio" name="richness" value="balanced" /> 適中</label>
-        <label><input type="radio" name="richness" value="verbose" /> 豐富</label>
+      <div class="row">
+        <div style="flex:1">
+          <label>頁數（1 - 20）</label>
+          <input id="pageCount" type="number" min="1" max="20" value="5" />
+          <div class="small">上限已強制為 20 頁</div>
+        </div>
+        <div style="width:140px">
+          <label>內容豐富度</label>
+          <select id="richness">
+            <option value="concise">精簡</option>
+            <option value="balanced" selected>適中</option>
+            <option value="verbose">豐富</option>
+          </select>
+        </div>
       </div>
 
       <div class="actions">
-        <button id="generateBtn" type="submit">生成簡報</button>
-        <div id="spinner" class="spinner hidden" aria-hidden="true"></div>
+        <button id="generateBtn" class="primary">生成簡報</button>
+        <button id="clearBtn" class="ghost">清除</button>
+        <div id="spinner" class="spinner" style="display:none"></div>
       </div>
-    </form>
 
-    <div id="status" class="status"></div>
+      <div id="status" class="status"></div>
 
-    <div id="resultArea" class="result hidden">
-      <h2>生成結果</h2>
-      <div id="resultContent"></div>
-      <div class="pager">
-        <button id="prevPage">← 上一頁</button>
-        <span id="pageIndicator">第 1 / 1 頁</span>
-        <button id="nextPage">下一頁 →</button>
+      <div style="margin-top:12px" class="small">
+        <strong>小提示：</strong> 若要更準確，請在「補充資料」放入重點或章節標題。若為長文，建議上傳 .txt 檔。
+      </div>
+    </div>
+
+    <!-- 右側展示區 -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div>
+          <h2 style="margin:0">生成結果</h2>
+          <div class="small">模型會回傳每頁標題、要點與備註</div>
+        </div>
+        <div>
+          <button id="downloadJson" class="download" style="display:none">下載 JSON</button>
+        </div>
+      </div>
+
+      <div id="resultArea" class="preview">
+        <div id="emptyNotice" class="small">尚未生成，請輸入主題並按「生成簡報」。</div>
+
+        <div id="slidesContainer" style="display:none"></div>
+
+        <div id="pagerControls" style="display:none" class="pager">
+          <button id="prevPage" class="ghost">← 上一頁</button>
+          <div class="page-ind" id="pageIndicator">第 1 / 1 頁</div>
+          <button id="nextPage" class="ghost">下一頁 →</button>
+        </div>
+
+        <div id="rawBox" style="display:none;margin-top:12px">
+          <h4 style="margin:6px 0">原始回傳（解析失敗時顯示）</h4>
+          <pre id="rawText" style="white-space:pre-wrap;max-height:220px;overflow:auto;background:#021024;padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.03)"></pre>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const form = document.getElementById('reportForm');
+    // 前端互動與 API 串接
+    (function(){
+      const topicEl = document.getElementById('topic');
+      const contextEl = document.getElementById('contextText');
+      const fileInput = document.getElementById('fileInput');
+      const pageCountEl = document.getElementById('pageCount');
+      const richnessEl = document.getElementById('richness');
       const generateBtn = document.getElementById('generateBtn');
+      const clearBtn = document.getElementById('clearBtn');
       const spinner = document.getElementById('spinner');
       const status = document.getElementById('status');
-      const resultArea = document.getElementById('resultArea');
-      const resultContent = document.getElementById('resultContent');
 
-      async function readFileAsText(file){
+      const slidesContainer = document.getElementById('slidesContainer');
+      const resultArea = document.getElementById('resultArea');
+      const emptyNotice = document.getElementById('emptyNotice');
+      const pagerControls = document.getElementById('pagerControls');
+      const prevPageBtn = document.getElementById('prevPage');
+      const nextPageBtn = document.getElementById('nextPage');
+      const pageIndicator = document.getElementById('pageIndicator');
+      const rawBox = document.getElementById('rawBox');
+      const rawText = document.getElementById('rawText');
+      const downloadJsonBtn = document.getElementById('downloadJson');
+
+      let slides = [];
+      let currentIndex = 0;
+
+      function showSpinner(on){
+        spinner.style.display = on ? 'inline-block' : 'none';
+      }
+
+      function showStatus(text, isError=false){
+        status.textContent = text || '';
+        status.style.color = isError ? '#ffb4b4' : '';
+      }
+
+      function readFileAsText(file){
         return new Promise((res, rej) => {
           const r = new FileReader();
           r.onload = () => res(r.result);
@@ -133,55 +196,193 @@
         });
       }
 
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
+      function renderSlide(idx){
+        slidesContainer.innerHTML = '';
+        if (!slides || slides.length === 0) return;
+        const s = slides[idx];
+        const div = document.createElement('div');
+        div.className = 'slide';
+        const title = document.createElement('h3');
+        title.textContent = s.title || ('第 ' + (idx+1) + ' 頁');
+        div.appendChild(title);
+
+        if (Array.isArray(s.bullets) && s.bullets.length > 0){
+          const ul = document.createElement('ul');
+          s.bullets.forEach(b => {
+            const li = document.createElement('li');
+            li.textContent = b;
+            ul.appendChild(li);
+          });
+          div.appendChild(ul);
+        } else {
+          const p = document.createElement('div');
+          p.className = 'small';
+          p.textContent = '(無要點)';
+          div.appendChild(p);
+        }
+
+        if (s.notes) {
+          const notes = document.createElement('div');
+          notes.className = 'small';
+          notes.style.marginTop = '8px';
+          notes.textContent = '備註：' + s.notes;
+          div.appendChild(notes);
+        }
+
+        slidesContainer.appendChild(div);
+        pageIndicator.textContent = `第 ${idx+1} / ${slides.length} 頁`;
+      }
+
+      function showSlides(mySlides){
+        slides = Array.isArray(mySlides) ? mySlides : [];
+        if (slides.length === 0){
+          slidesContainer.style.display = 'none';
+          pagerControls.style.display = 'none';
+          emptyNotice.style.display = 'block';
+          downloadJsonBtn.style.display = 'none';
+          return;
+        }
+        emptyNotice.style.display = 'none';
+        slidesContainer.style.display = 'block';
+        pagerControls.style.display = 'flex';
+        rawBox.style.display = 'none';
+        currentIndex = 0;
+        renderSlide(currentIndex);
+        downloadJsonBtn.style.display = 'inline-block';
+      }
+
+      prevPageBtn.addEventListener('click', () => {
+        if (currentIndex > 0) {
+          currentIndex--;
+          renderSlide(currentIndex);
+        }
+      });
+      nextPageBtn.addEventListener('click', () => {
+        if (currentIndex < slides.length - 1) {
+          currentIndex++;
+          renderSlide(currentIndex);
+        }
+      });
+
+      clearBtn.addEventListener('click', () => {
+        topicEl.value = '';
+        contextEl.value = '';
+        fileInput.value = '';
+        pageCountEl.value = 5;
+        richnessEl.value = 'balanced';
+        slidesContainer.innerHTML = '';
+        slides = [];
+        emptyNotice.style.display = 'block';
+        pagerControls.style.display = 'none';
+        downloadJsonBtn.style.display = 'none';
+        rawBox.style.display = 'none';
+        showStatus('');
+      });
+
+      downloadJsonBtn.addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify({slides, generatedAt: new Date().toISOString()}, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (topicEl.value || 'presentation') + '.json';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      generateBtn.addEventListener('click', async () => {
+        showStatus('');
+        rawBox.style.display = 'none';
+        const topic = topicEl.value.trim();
+        if (!topic) {
+          showStatus('請輸入簡報主題。', true);
+          return;
+        }
+        let pageCount = parseInt(pageCountEl.value) || 5;
+        pageCount = Math.max(1, Math.min(pageCount, 20)); // enforce 1..20
+        const richness = richnessEl.value || 'balanced';
+
+        // 取得 text 來源
+        let contextText = contextEl.value.trim();
+        if (!contextText && fileInput.files && fileInput.files.length > 0) {
+          try {
+            contextText = await readFileAsText(fileInput.files[0]);
+          } catch (e) {
+            console.error(e);
+            showStatus('上傳檔案讀取失敗。', true);
+            return;
+          }
+        }
+
+        // UI
         generateBtn.disabled = true;
-        spinner.classList.remove('hidden');
-        status.textContent = 'AI 正在生成中，請稍候... (可能需要 10-20 秒)';
-        resultArea.classList.add('hidden');
-        resultContent.textContent = '';
+        showSpinner(true);
+        showStatus('正在請求伺服器生成中，請稍候...');
 
         try {
-          const title = document.getElementById('title').value.trim();
-          const textData = document.getElementById('textData').value.trim();
-          const fileInput = document.getElementById('fileInput');
-          const pages = document.getElementById('pages').value;
-          const richness = document.querySelector('input[name="richness"]:checked').value;
-
-          if (!title) throw new Error('請輸入簡報主題');
-
-          let uploadedText = '';
-          if (fileInput.files && fileInput.files.length > 0){
-            uploadedText = await readFileAsText(fileInput.files[0]);
-          }
-
-          const payload = { title, pages, richness, textData, uploadedText };
-
+          const payload = { topic, contextText, pageCount, richness };
           const resp = await fetch('/api/generate', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload)
           });
 
+          const text = await resp.text();
+          let json;
+          try { json = JSON.parse(text); } catch(e) { json = null; }
+
           if (!resp.ok) {
-            const errText = await resp.text();
-            throw new Error('伺服器回應錯誤：' + errText);
+            // 嘗試顯示後端回傳的錯誤 JSON
+            let msg = `伺服器回應錯誤：${resp.status}`;
+            if (json && json.error) msg += ' — ' + json.error;
+            showStatus(msg, true);
+            // show raw for debug
+            rawText.textContent = text;
+            rawBox.style.display = 'block';
+            return;
           }
 
-          const data = await resp.json();
-          if (data.error) throw new Error(data.error);
+          // 成功 HTTP，但 API 可能回傳 ok:false (解析失敗)
+          if (json) {
+            if (json.ok === true && Array.isArray(json.slides)) {
+              showStatus('生成完成。');
+              showSlides(json.slides);
+              // show raw hidden but save
+              rawText.textContent = json.raw || '';
+              rawBox.style.display = 'none';
+            } else if (json.ok === false) {
+              showStatus('生成完成，但回傳格式非預期（已顯示原始回傳）。', true);
+              rawText.textContent = json.raw || (json.warning || JSON.stringify(json));
+              rawBox.style.display = 'block';
+              slidesContainer.style.display = 'none';
+              pagerControls.style.display = 'none';
+            } else if (Array.isArray(json.slides)) {
+              // backward compatibility: sometimes API returns slides directly
+              showStatus('生成完成。');
+              showSlides(json.slides);
+            } else {
+              showStatus('伺服器回傳不可解析的內容（已顯示原始回傳）。', true);
+              rawText.textContent = text;
+              rawBox.style.display = 'block';
+            }
+          } else {
+            // 非 JSON 回傳
+            showStatus('伺服器回傳非 JSON 格式（已顯示原始回傳）。', true);
+            rawText.textContent = text;
+            rawBox.style.display = 'block';
+          }
 
-          resultContent.textContent = data.result || JSON.stringify(data, null, 2);
-          resultArea.classList.remove('hidden');
-          status.textContent = '生成完成';
         } catch (err) {
-          status.textContent = '發生錯誤：' + (err.message || err);
+          console.error(err);
+          showStatus('發生錯誤：' + (err.message || err), true);
         } finally {
           generateBtn.disabled = false;
-          spinner.classList.add('hidden');
+          showSpinner(false);
         }
       });
-    });
+
+      // 初始狀態
+      emptyNotice.style.display = 'block';
+    })();
   </script>
 </body>
 </html>
