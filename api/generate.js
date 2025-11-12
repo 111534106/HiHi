@@ -1,113 +1,168 @@
-// 這就是 server.js 的「Vercel 雲端版本」
-// Vercel 會自動將 /api 資料夾中的 .js 檔案變成「Serverless Function」
-
+// api/generate.js
+// Vercel serverless function for generating slide content via Google Generative AI
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// 2. [!! AI 升級 !!] AI 提示 (System Instruction)
-//    我們告訴 AI 如何處理新的選項
+// 系統提示（system instruction）：要求模型輸出固定 JSON 結構
 const aiSystemInstruction = `
-你是一個專業的簡報設計師。
-你的任務是根據使用者提供的「主題」，並**優先使用**使用者提供的「現有資料」（如果有的話），来產生一份結構完整的簡報內容。
-
-[ 使用者需求 ]
-1.  **頁數**：使用者會指定一個「希望頁數」，請你生成的投影片數量 (slides 陣列的長度) **盡量接近**這個數字。
-2.  **豐富度**：使用者會指定「內容豐富度」，你必須遵照：
-    * **'精簡'**：`slide_content` 陣列中只包含**關鍵字或短語**。
-    * **'適中'**：`slide_content` 陣列中包含**完整的句子**作為要點。
-    * **'豐富'**：`slide_content` 陣列中包含**詳細的說明或小段落**。
-
-[ 優先級 ]
-- 如果使用者提供了「現有資料」（context），請你**必須**以這份資料為**主要**內容來進行總結和整理，生成簡報。
-- 如果使用者沒有提供「現V資料」，你才根據「主題」自行發揮。
-
-[ 輸出格式 ]
-你必須總是回傳嚴格的 JSON 格式。
-簡報內容應包含：
-1.  一份吸引人的「簡報主標題」(presentation_title)。
-2.  一個投影片陣列 (slides)。
-每張投影片 (slide) 都必須包含：
-1.  投影片編號 (slide_number)，從 1 開始。
-2.  投影片標題 (slide_title)，例如「封面」、「介紹」、「結論」等。
-3.  投影片的內容要點 (slide_content)，這必須是一個包含 2 到 4 個字串的陣列 (字串的詳細程度取決於使用者指定的「豐富度」)。
-4.  一張給設計師的「圖片建議」(image_suggestion)，用來描述這張投影片適合的配圖。
-
-JSON 結構範本如下：
+你是一位專業的簡報設計師 (AI presenter assistant)。
+輸出必須為有效的 JSON（不要包含多餘文字或程式碼區塊），且格式如下：
 {
-  "presentation_title": "範例標題",
   "slides": [
     {
-      "slide_number": 1,
-      "slide_title": "封面",
-      "slide_content": ["要點1", "要點2"],
-      "image_suggestion": "圖片建議1"
-    }
-  ]
+      "title": "第一頁標題",
+      "bullets": ["要點 1", "要點 2", "..."],
+      "notes": "備註或補充說明 (可選)"
+    },
+    ...
+  ],
+  "summary": "一段簡短總結 (一到兩句，非必需)"
 }
+
+要求：
+- 請根據使用者提供的主題 (topic) 與補充內容 (contextText) 來生成投影片。
+- 若使用者要求 "精簡"，bullets 應為短語或關鍵字；若為 "適中"，每條 bullets 為一句話；若為 "豐富"，可提供完整句子並包含 1-2 個延伸細節（但每頁 bullets 建議不超過 6 條）。
+- 儘量生成接近使用者要求的頁數 (pageCount)，但若資料太少可適度合併或補充常識性內容（不要自創引用）。
+- 不要輸出任何非 JSON 文本、說明或 debug 訊息。
 `;
 
-// 3. Vercel 的 Serverless Function 主體
-export default async function handler(req, res) {
-    // 只接受 POST 請求
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: '僅允許 POST 方法' });
-    }
+/**
+ * 小工具：把文字限制到 maxLen 字元，並在過長時保留前後重點（簡單策略）
+ */
+function truncateTextForPrompt(text, maxLen = 4000) {
+  if (!text) return "";
+  if (text.length <= maxLen) return text;
+  // 取前面的一部分 + 後面的一小段，讓模型仍能獲得上下文
+  const head = text.slice(0, Math.floor(maxLen*0.7));
+  const tail = text.slice(-Math.floor(maxLen*0.3));
+  return head + "\n\n...（中間內容已截斷）...\n\n" + tail;
+}
 
+/**
+ * 小工具：嘗試把 AI 回傳的文字清理成純 JSON
+ */
+function extractJsonFromText(text) {
+  if (!text || typeof text !== 'string') return null;
+  let t = text.trim();
+  // 移除 code-fence
+  if (t.startsWith("```")) {
+    const lines = t.split("\n");
+    // 移除首尾 ``` 區塊，如果有語法標示也一併移掉
+    if (lines[0].startsWith("```")) lines.shift();
+    if (lines[lines.length-1].startsWith("```")) lines.pop();
+    t = lines.join("\n");
+  }
+  // 嘗試尋找第一個 { 與最後一個 }
+  const first = t.indexOf('{');
+  const last = t.lastIndexOf('}');
+  if (first !== -1 && last !== -1 && last > first) {
+    const candidate = t.slice(first, last+1);
     try {
-        // [!! 修正 v8 !!] 
-        // 檢查金鑰是否存在，如果不存在，就回傳一個*標準的 JSON 錯誤*
-        if (!process.env.GEMINI_API_KEY) {
-            console.error("Vercel 環境變數 'GEMINI_API_KEY' 尚未設定。");
-            return res.status(500).json({ error: '伺服器金鑰尚未設定 (GEMINI_API_KEY is missing)' });
-        }
-        
-        // [!! 修正 v8 !!] 
-        // 只有在金鑰存在時，才初始化 genAI
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-        // [!! 修改 !!] 取得所有新選項
-        const { topic, context, pageCount, richness } = req.body;
-
-        if (!topic) {
-            return res.status(400).json({ error: '請提供主題 (topic)' });
-        }
-
-        // [!! 修改 !!] 組合一個更詳細的訊息給 AI
-        const userMessage = `
-        簡報主題：${topic}
-        希望頁數：${pageCount || 7}
-        內容豐富度：${richness || '適中'}
-
-        現有資料（請優先使用此資料）：
-        ${context || '無'}
-        `;
-
-        // [!! AI 升級 !!] 
-        // 我們使用 gemini-pro，並在 systemInstruction 中強化 JSON 格式
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-pro", // 保持使用 gemini-pro
-            systemInstruction: aiSystemInstruction,
-            generationConfig: {
-                responseMimeType: "application/json", 
-            }
-        });
-
-        const chat = model.startChat();
-        const result = await chat.sendMessage(userMessage); // 傳送組合好的訊息
-        const responseText = result.response.text();
-
-        // [!! 清理修正 !!] (保持不變)
-        let cleanedText = responseText;
-        if (cleanedText.startsWith("```json")) {
-            cleanedText = cleanedText.substring(7); // 移除 "```json"
-        }
-        if (cleanedText.endsWith("```")) {
-            cleanedText = cleanedText.substring(0, cleanedText.length - 3); // 移除 "```"
-        }
-        
-        res.status(200).json(JSON.parse(cleanedText.trim()));
-
-    } catch (error) {
-        console.error("AI 生成失敗:", error);
-        res.status(500).json({ error: error.message || 'AI 生成失敗，請查看後端日誌' });
+      return JSON.parse(candidate);
+    } catch (e) {
+      // 解析失敗就返回 null，呼叫端會回傳原始文字供 debug
+      return null;
     }
+  }
+  return null;
+}
+
+export default async function handler(req, res) {
+  // 只接受 POST
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'Method not allowed. Use POST.' });
+  }
+
+  // 檢查金鑰
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Server misconfiguration: GEMINI_API_KEY is not set.' });
+  }
+
+  // 初始化 client（只在有金鑰時）
+  let genAI;
+  try {
+    genAI = new GoogleGenerativeAI(apiKey);
+  } catch (err) {
+    console.error('GenAI init error:', err);
+    return res.status(500).json({ error: 'Failed to init GoogleGenerativeAI client.' });
+  }
+
+  try {
+    // 從 body 取得參數（容錯）
+    const {
+      topic,
+      contextText,    // 前端傳入的純文字 (user pasted / uploaded)
+      pageCount = 5,  // 預設頁數
+      richness = 'balanced' // 'concise' | 'balanced' | 'verbose'
+    } = req.body || {};
+
+    if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
+      return res.status(400).json({ error: '請提供主題 (topic)。' });
+    }
+
+    // 預處理 contextText：去頭尾空白並截斷
+    const cleanedContext = truncateTextForPrompt(String(contextText || '').trim(), 3800);
+
+    // 組出 user message（引導模型輸出 JSON）
+    const userMessage = `
+使用者主題：${topic.trim()}
+
+使用者提供的補充資料（已截斷處理，若為空則忽略）：
+${cleanedContext || "(無補充資料)"}
+
+請依據上面資料產生簡報內容，輸出必須是有效 JSON（不要包含任何額外文字），格式請遵循 system instruction 中指定的 schema。
+請根據以下額外規則來調整內容：
+- pageCount: ${pageCount}
+- richness: ${richness}
+- 若資料不足以填滿頁數，可合理延伸一般性背景知識，但**不得**捏造引用或具體數據來源。
+`;
+
+    // 取得 Generative Model（保留你原本使用 gemini-pro 的做法）
+    const model = genAI.getGenerativeModel({
+      model: "gemini-pro",
+      systemInstruction: aiSystemInstruction,
+      generationConfig: {
+        responseMimeType: "application/json",
+        maxOutputTokens: 1200, // 視情況調整
+      },
+    });
+
+    // 開始會話並送出訊息
+    const chat = model.startChat();
+    const result = await chat.sendMessage(userMessage, {
+      // 可以調整 temperature、candidateCount 等參數
+      temperature: 0.2,
+      candidateCount: 1,
+    });
+
+    // 取回文字
+    const responseText = (result && result.response && result.response.text) ? result.response.text() : (result.response || '');
+
+    // 嘗試直接解析成 JSON（先清理 code-fence 等）
+    const parsed = extractJsonFromText(responseText);
+
+    if (parsed) {
+      // 若成功解析，確保回傳結構化資料
+      return res.status(200).json({
+        ok: true,
+        source: 'gemini-pro',
+        slides: parsed.slides || parsed.pages || parsed.items || [],
+        summary: parsed.summary || parsed.note || '',
+        raw: responseText
+      });
+    } else {
+      // 解析失敗：回傳原始文字以利除錯（前端可顯示原始結果）
+      console.warn('AI 回傳但無法解析為 JSON，回傳原始文字供 debug。');
+      return res.status(200).json({
+        ok: false,
+        warning: 'AI 回傳內容無法解析為預期 JSON 格式。請查看 raw 欄位。',
+        raw: responseText
+      });
+    }
+
+  } catch (err) {
+    console.error('generate.js error:', err);
+    return res.status(500).json({ error: err.message || 'Internal server error' });
+  }
 }
