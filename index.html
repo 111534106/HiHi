@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 簡報產生器</title>
+    <title>AI 簡報產生器 (v2)</title>
     <!-- 載入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -34,13 +34,27 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        /* [!! 新增 !!] 用於「內容豐富度」的選項樣式 */
+        .richness-label {
+            @apply block w-full cursor-pointer rounded-lg border border-gray-300 p-3 text-center text-sm font-medium text-gray-700 transition duration-150;
+        }
+        /* 當 radio 被選中時，label 的樣式 */
+        input[type="radio"]:checked + .richness-label {
+            @apply border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-500;
+        }
+        /* 隱藏真正的 radio an */
+        input[type="radio"].richness-radio {
+            display: none;
+        }
+
     </style>
 </head>
 <body class="bg-gray-100 flex flex-col items-center justify-start min-h-screen p-4 md:p-8">
 
     <!-- 1. 輸入區域 -->
     <div class="w-full max-w-4xl mb-4 p-4 bg-white rounded-lg shadow-lg">
-        <h2 class="text-xl font-bold mb-3 text-gray-800">AI 簡報產生器</h2>
+        <h2 class="text-xl font-bold mb-3 text-gray-800">AI 簡報產生器 (v2)</h2>
         
         <div class="mb-3">
             <label for="topic-input" class="block text-sm font-medium text-gray-700 mb-1">簡報主題 (必填)</label>
@@ -62,6 +76,37 @@
                 ">
             </div>
         </div>
+        
+        <!-- [!! 新增 !!] 頁數 和 豐富度 選項 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label for="page-count" class="block text-sm font-medium text-gray-700 mb-1">希望頁數</label>
+                <select id="page-count" class="w-full border border-gray-300 rounded-lg p-3 text-base">
+                    <option value="5">5 頁 (精簡)</option>
+                    <option value="7" selected>7 頁 (標準)</option>
+                    <option value="10">10 頁 (詳細)</option>
+                    <option value="15">15 頁 (深入)</option>
+                    <option value="20">20 頁 (完整報告)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">內容豐富度</label>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <input type="radio" name="richness" id="richness-concise" value="精簡" class="richness-radio">
+                        <label for="richness-concise" class="richness-label">精簡</label>
+                    </div>
+                    <div>
+                        <input type="radio" name="richness" id="richness-medium" value="適中" class="richness-radio" checked>
+                        <label for="richness-medium" class="richness-label">適中</label>
+                    </div>
+                    <div>
+                        <input type="radio" name="richness" id="richness-rich" value="豐富" class="richness-radio">
+                        <label for="richness-rich" class="richness-label">豐富</label>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <button id="generate-btn" class="w-full bg-blue-600 text-white font-medium py-3 px-5 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md">
             <span id="btn-text">生成簡報</span>
@@ -69,24 +114,22 @@
         </button>
     </div>
 
-    <!-- 2. 讀取中提示 -->
+    <!-- 2. 讀取中提示 (不變) -->
     <div id="loading-indicator" class="w-full max-w-4xl mb-4 p-6 bg-white rounded-lg shadow-lg text-center hidden">
         <div class="loader mx-auto"></div>
         <p class="text-gray-600 mt-3">AI 正在生成中，請稍候... (可能需要 10-20 秒)</p>
     </div>
 
-    <!-- 3. 簡報顯示區域 -->
+    <!-- 3. 簡報顯示區域 (不變) -->
     <div id="presentation-container" class="w-full max-w-4xl bg-white rounded-lg shadow-2xl overflow-hidden hidden">
         <!-- 簡報標題 -->
         <header class="bg-gray-800 text-white p-4">
             <h1 id="presentation-title" class="text-xl md:text-2xl font-bold text-center"></h1>
         </header>
-
         <!-- 投影片內容區域 -->
         <main id="slide-container" class="p-6 md:p-10 relative">
             <!-- 投影片將由 JavaScript 動態插入此處 -->
         </main>
-
         <!-- 導覽控制 -->
         <footer class="bg-gray-50 border-t border-gray-200 p-4 flex justify-between items-center">
             <button id="prev-btn" class="bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg hover:bg-gray-400 disabled:opacity-50 transition duration-200">
@@ -109,8 +152,12 @@
         // 取得 DOM 元素
         const generateBtn = document.getElementById('generate-btn');
         const topicInput = document.getElementById('topic-input');
-        const contextInput = document.getElementById('context-input'); // [!!]
-        const fileInput = document.getElementById('file-input'); // [!!]
+        const contextInput = document.getElementById('context-input');
+        const fileInput = document.getElementById('file-input');
+        
+        // [!! 新增 !!] 取得新選項的 DOM
+        const pageCountSelect = document.getElementById('page-count');
+
         const loadingIndicator = document.getElementById('loading-indicator');
         const presentationContainer = document.getElementById('presentation-container');
         
@@ -121,7 +168,7 @@
         const currentSlideNumEl = document.getElementById('current-slide-num');
         const totalSlidesNumEl = document.getElementById('total-slides-num');
 
-        // 渲染投影片
+        // 渲染投影片 (不變)
         function renderSlidesUI(presentationData) {
             slideContainer.innerHTML = ''; // 清空
             presentationTitle.textContent = presentationData.presentation_title;
@@ -162,7 +209,7 @@
             totalSlidesNumEl.textContent = totalSlides;
         }
 
-        // 顯示投影片
+        // 顯示投影片 (不變)
         function showSlide(index) {
             const currentActive = document.querySelector('.slide.active');
             if (currentActive) {
@@ -177,7 +224,7 @@
             updateControls();
         }
 
-        // 更新按鈕
+        // 更新按鈕 (不變)
         function updateControls() {
             prevBtn.disabled = (currentSlideIndex === 0);
             nextBtn.disabled = (currentSlideIndex === totalSlides - 1);
@@ -195,7 +242,7 @@
             if (currentSlideIndex < totalSlides - 1) showSlide(currentSlideIndex + 1);
         });
 
-        // 綁定「上傳檔案」事件
+        // 綁定「上傳檔案」事件 (不變)
         fileInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file) {
@@ -205,7 +252,7 @@
                 }
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    contextInput.value = e.target.result; // 填入文字框
+                    contextInput.value = e.target.result; // Tien Ru Wen Zi Kuang
                 };
                 reader.onerror = (e) => { alert("檔案讀取失敗。"); };
                 reader.readAsText(file);
@@ -216,7 +263,13 @@
         // 綁定「生成」按鈕事件
         generateBtn.addEventListener('click', async () => {
             const topic = topicInput.value;
-            const context = contextInput.value; // [!!]
+            const context = contextInput.value;
+            
+            // [!! 新增 !!] 取得新選項的值
+            const pageCount = pageCountSelect.value;
+            // 取得被選中的 richness radio
+            const richness = document.querySelector('input[name="richness"]:checked').value;
+
 
             if (!topic) {
                 alert('請輸入簡報主題');
@@ -232,15 +285,18 @@
 
             try {
                 // 2. 呼叫我們的「雲端後端」
-                // Vercel 會自動把 /api/generate.js 變成一個公開的 API 端點
-                // [注意] 我們使用相對路徑 '/api/generate'
                 const response = await fetch('/api/generate', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    // [!!] 把 topic 和 context 一起傳過去
-                    body: JSON.stringify({ topic: topic, context: context })
+                    // [!! 修改 !!] 把所有選項都傳過去
+                    body: JSON.stringify({ 
+                        topic: topic, 
+                        context: context,
+                        pageCount: pageCount,
+                        richness: richness
+                    })
                 });
 
                 if (!response.ok) {
