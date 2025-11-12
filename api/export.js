@@ -1,4 +1,4 @@
-// api/export.js - 最終穩定版（用 pptxgenjs 產生 PDF/PPT，無亂碼）
+// api/export.js - 只支援 PPTX 下載
 import PptxGenJS from 'pptxgenjs';
 
 export default async function handler(req, res) {
@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: '僅支援 POST' });
   }
 
-  const { slides, format = 'pdf' } = req.body;
+  const { slides } = req.body;
 
   if (!slides || !Array.isArray(slides)) {
     return res.status(400).json({ error: '無效 slides 資料' });
@@ -40,17 +40,9 @@ export default async function handler(req, res) {
       }
     });
 
-    let buffer;
-    if (format === 'pptx') {
-      buffer = await pptx.write('nodebuffer');
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
-      res.setHeader('Content-Disposition', 'attachment; filename=presentation.pptx');
-    } else {
-      buffer = await pptx.write('nodebuffer', { outputType: 'nodebuffer', format: 'pdf' });
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename=presentation.pdf');
-    }
-
+    const buffer = await pptx.write('nodebuffer');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', 'attachment; filename=presentation.pptx');
     res.send(buffer);
 
   } catch (error) {
