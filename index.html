@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AI 簡報產生器 (v3)</title>
-  <meta name="description" content="AI 一鍵生成投影片 + PDF/PPT 下載 + 多格式上傳" />
+  <title>AI 簡報產生器 (v4)</title>
+  <meta name="description" content="AI 一鍵生成投影片 + PDF/PPT 下載 + docx/pdf 上傳" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root{
@@ -78,7 +78,7 @@
       <div class="topbar">
         <div>
           <h1>AI 簡報產生器</h1>
-          <div class="small">支援 Word/PPT/Excel/PDF 上傳 + PDF/PPT 下載</div>
+          <div class="small">支援 .docx / .pdf / .txt 上傳 + PDF/PPT 下載</div>
         </div>
         <div class="small">Max 20 頁</div>
       </div>
@@ -89,8 +89,8 @@
       <label>補充資料（選填）</label>
       <textarea id="contextText" placeholder="可貼上文章、會議紀錄或重點摘要..."></textarea>
 
-      <label>上傳檔案（支援 .txt, .docx, .pptx, .xlsx, .pdf）</label>
-      <input id="fileInput" type="file" accept=".txt,.docx,.pptx,.xlsx,.pdf" />
+      <label>上傳檔案（支援 .txt, .docx, .pdf）</label>
+      <input id="fileInput" type="file" accept=".txt,.docx,.pdf" />
       <div id="fileInfo" class="file-info"></div>
 
       <div class="row">
@@ -119,7 +119,7 @@
       <div id="status" class="status"></div>
 
       <div style="margin-top:12px" class="small">
-        <strong>小提示：</strong> 上傳檔案後會自動提取文字作為補充資料。生成後可下載 PDF 或 PPT 檔案。
+        <strong>小提示：</strong> 上傳 .docx 或 .pdf 會自動提取文字作為補充資料。
       </div>
     </div>
 
@@ -139,9 +139,9 @@
         <div id="slidesContainer" style="display:none"></div>
 
         <div id="pagerControls" style="display:none" class="pager">
-          <button id="prevPage" class="ghost">← 上一頁</button>
+          <button id="prevPage" class="ghost">上一頁</button>
           <div class="page-ind" id="pageIndicator">第 1 / 1 頁</div>
-          <button id="nextPage" class="ghost">下一頁 →</button>
+          <button id="nextPage" class="ghost">下一頁</button>
         </div>
 
         <div id="rawBox" style="display:none;margin-top:12px">
@@ -354,11 +354,13 @@
         const richness = richnessEl.value || 'balanced';
 
         let fileBase64 = '';
+        let fileName = '';
         const file = fileInput.files[0];
         if (file) {
           showProgress(10);
           try {
             fileBase64 = await readFileAsBase64(file);
+            fileName = file.name;
             showProgress(30);
           } catch (e) {
             showStatus('檔案讀取失敗。', true);
@@ -372,7 +374,13 @@
         showStatus('正在請求 AI 生成中...');
 
         try {
-          const payload = { topic, fileBase64, pageCount, richness };
+          const payload = { 
+            topic, 
+            fileBase64, 
+            fileName,  // 傳檔名給後端
+            pageCount, 
+            richness 
+          };
           const resp = await fetch('/api/generate', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
