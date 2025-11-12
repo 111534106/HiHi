@@ -1,4 +1,4 @@
-// api/generate.js - 最終穩定版（支援 .txt/.docx/.pdf）
+// api/generate.js - 最終穩定版（正確 arrayBuffer + .txt/.docx/.pdf）
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mammoth from "mammoth";
 import pdf from "pdf-parse";
@@ -62,10 +62,11 @@ async function parseFile(buffer, fileName) {
   const ext = fileName.split('.').pop().toLowerCase();
 
   if (ext === 'txt') {
-    return new TextDecoder().decode(buffer); // 直接解碼
+    return new TextDecoder().decode(buffer);
   }
 
   if (ext === 'docx') {
+    // 關鍵修正：轉為 ArrayBuffer
     const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
     const result = await mammoth.extractRawText({ arrayBuffer });
     return result.value;
@@ -98,7 +99,9 @@ export default async function handler(req, res) {
   let contextText = '';
   if (fileBase64 && fileName) {
     try {
-      const buffer = Buffer.from(fileBase64.split(',')[1], 'base64');
+      // 關鍵：移除 data:xxx;base64, 並正確轉 Buffer
+      const base64Data = fileBase64.split(';base64,').pop();
+      const buffer = Buffer.from(base64Data, 'base64');
       contextText = await parseFile(buffer, fileName);
       contextText = contextText.trim();
     } catch (e) {
