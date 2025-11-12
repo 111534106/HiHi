@@ -1,4 +1,4 @@
-// api/generate.js - 最終穩定版（支援 docx/pdf，無 Python 依賴）
+// api/generate.js - 最終穩定版（支援 .txt/.docx/.pdf）
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mammoth from "mammoth";
 import pdf from "pdf-parse";
@@ -57,12 +57,17 @@ async function callGeminiWithRetryAndFallback(message, retries = 3) {
   }
 }
 
-// 解析檔案（支援 .docx 和 .pdf）
+// 解析檔案（支援 .txt, .docx, .pdf）
 async function parseFile(buffer, fileName) {
   const ext = fileName.split('.').pop().toLowerCase();
 
+  if (ext === 'txt') {
+    return new TextDecoder().decode(buffer); // 直接解碼
+  }
+
   if (ext === 'docx') {
-    const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    const result = await mammoth.extractRawText({ arrayBuffer });
     return result.value;
   }
 
@@ -71,7 +76,7 @@ async function parseFile(buffer, fileName) {
     return data.text;
   }
 
-  throw new Error(`不支援的檔案格式：.${ext}（僅支援 .docx 和 .pdf）`);
+  throw new Error(`不支援的檔案格式：.${ext}（僅支援 .txt, .docx, .pdf）`);
 }
 
 export default async function handler(req, res) {
