@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AI 簡報產生器 (v4)</title>
-  <meta name="description" content="AI 一鍵生成投影片 + PDF/PPT 下載 + docx/pdf 上傳" />
+  <title>AI 簡報產生器 (v5)</title>
+  <meta name="description" content="AI 一鍵生成投影片 + PDF/PPT 下載 + txt/docx/pdf 上傳" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root{
@@ -43,8 +43,6 @@
     }
     textarea{min-height:120px;resize:vertical}
     .row{display:flex;gap:8px;align-items:center}
-    .radios{display:flex;gap:10px;margin-top:8px}
-    .radios label{font-weight:500;color:var(--text);font-size:13px}
     .actions{display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap}
     button.primary{
       background:linear-gradient(90deg,var(--accent),var(--accent-2));
@@ -78,7 +76,7 @@
       <div class="topbar">
         <div>
           <h1>AI 簡報產生器</h1>
-          <div class="small">支援 .docx / .pdf / .txt 上傳 + PDF/PPT 下載</div>
+          <div class="small">支援 .txt / .docx / .pdf 上傳 + PDF/PPT 下載</div>
         </div>
         <div class="small">Max 20 頁</div>
       </div>
@@ -119,7 +117,7 @@
       <div id="status" class="status"></div>
 
       <div style="margin-top:12px" class="small">
-        <strong>小提示：</strong> 上傳 .docx 或 .pdf 會自動提取文字作為補充資料。
+        <strong>小提示：</strong> 上傳檔案會自動提取文字作為補充資料。
       </div>
     </div>
 
@@ -377,7 +375,7 @@
           const payload = { 
             topic, 
             fileBase64, 
-            fileName,  // 傳檔名給後端
+            fileName: fileName || '',  // 安全傳遞
             pageCount, 
             richness 
           };
